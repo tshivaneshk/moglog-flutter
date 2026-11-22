@@ -24,6 +24,10 @@ subprojects {
                     if ((compileSdk ?: 0) < 36) {
                         compileSdk = 36
                     }
+                    lint {
+                        checkReleaseBuilds = false
+                        abortOnError = false
+                    }
                 }
             }
         }

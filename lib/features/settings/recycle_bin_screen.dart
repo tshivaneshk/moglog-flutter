@@ -40,6 +40,32 @@ class RecycleBinScreen extends ConsumerWidget {
             ),
             trailingActions: deletedShows.isNotEmpty
                 ? [
+                    if (deletedShows.length > 1)
+                      IosPressable(
+                        onTap: () async {
+                          final ctrl = ref.read(dramaControllerProvider);
+                          for (final d in deletedShows) {
+                            await ctrl.restoreDrama(d);
+                          }
+                          ref.read(toastProvider.notifier).show(
+                                'Restored ${deletedShows.length} shows to library',
+                              );
+                        },
+                        hapticOnTap: true,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 4,
+                          ),
+                          child: Text(
+                            'Restore All',
+                            style: t.callout.copyWith(
+                              color: c.accent,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
                     IosPressable(
                       onTap: () {
                         showIosActionSheet(
@@ -114,6 +140,22 @@ class RecycleBinScreen extends ConsumerWidget {
                                 .show('Restored "${drama.title}"');
                             return true;
                           } else {
+                            var confirmed = false;
+                            await showIosActionSheet(
+                              context: context,
+                              title: 'Delete "${drama.title}" Forever?',
+                              message:
+                                  'This show will be permanently removed and cannot be recovered.',
+                              actions: [
+                                ActionSheetItem(
+                                  label: 'Delete Forever',
+                                  icon: MoglogIcons.trash,
+                                  isDestructive: true,
+                                  onTap: () => confirmed = true,
+                                ),
+                              ],
+                            );
+                            if (!confirmed) return false;
                             await ctrl.deleteDramaPermanently(drama);
                             ref
                                 .read(toastProvider.notifier)
@@ -224,13 +266,28 @@ class RecycleBinScreen extends ConsumerWidget {
                                 iconSize: 15,
                                 tint: c.destructive,
                                 tooltip: 'Delete Permanently',
-                                onTap: () async {
-                                  await ref
-                                      .read(dramaControllerProvider)
-                                      .deleteDramaPermanently(drama);
-                                  ref.read(toastProvider.notifier).show(
-                                        'Permanently deleted "${drama.title}"',
-                                      );
+                                onTap: () {
+                                  showIosActionSheet(
+                                    context: context,
+                                    title: 'Delete "${drama.title}" Forever?',
+                                    message:
+                                        'This show will be permanently removed and cannot be recovered.',
+                                    actions: [
+                                      ActionSheetItem(
+                                        label: 'Delete Forever',
+                                        icon: MoglogIcons.trash,
+                                        isDestructive: true,
+                                        onTap: () async {
+                                          await ref
+                                              .read(dramaControllerProvider)
+                                              .deleteDramaPermanently(drama);
+                                          ref.read(toastProvider.notifier).show(
+                                                'Permanently deleted "${drama.title}"',
+                                              );
+                                        },
+                                      ),
+                                    ],
+                                  );
                                 },
                               ),
                             ],

@@ -80,6 +80,12 @@ class _AboutScreenState extends State<AboutScreen> {
     _initAndCheck();
   }
 
+  @override
+  void dispose() {
+    _dio.close();
+    super.dispose();
+  }
+
   Future<void> _initAndCheck() async {
     try {
       final info = await PackageInfo.fromPlatform();
@@ -235,7 +241,24 @@ class _AboutScreenState extends State<AboutScreen> {
                 // Branding Hero
                 Column(
                   children: [
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 68,
+                      height: 68,
+                      padding: const EdgeInsets.all(10),
+                      decoration: ShapeDecoration(
+                        color: c.secondaryBackground,
+                        shape: MoglogShapes.smooth(
+                          18,
+                          side: BorderSide(color: c.separator, width: 0.7),
+                        ),
+                      ),
+                      child: Image.asset(
+                        'assets/images/app_logo2.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     Text(
                       'Moglog',
                       style: t.title2.copyWith(
@@ -250,7 +273,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Clean, private drama & TV tracker',
+                      'Clean, private drama & TV tracker · Open Source (MIT)',
                       style: t.caption.copyWith(color: c.tertiaryLabel),
                     ),
                     const SizedBox(height: 12),
@@ -269,6 +292,19 @@ class _AboutScreenState extends State<AboutScreen> {
                       showChevron: true,
                       onTap: () => launchUrl(
                         Uri.parse('https://moglog-instructions.vercel.app'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                    ),
+                    IosGroupedRow(
+                      title: 'Open-Source Repository (MIT)',
+                      subtitle: 'Browse source code & contribute on GitHub',
+                      icon: MoglogIcons.sparkles,
+                      iconBackground: c.statusPlanned,
+                      showChevron: true,
+                      onTap: () => launchUrl(
+                        Uri.parse(
+                          'https://github.com/tshivaneshk/moglog-flutter',
+                        ),
                         mode: LaunchMode.externalApplication,
                       ),
                     ),
@@ -296,7 +332,7 @@ class _AboutScreenState extends State<AboutScreen> {
                       showDivider: false,
                       onTap: () => launchUrl(
                         Uri.parse(
-                          'https://github.com/tshivaneshk/Moglog-Releases/issues',
+                          'https://github.com/tshivaneshk/moglog-flutter/issues',
                         ),
                         mode: LaunchMode.externalApplication,
                       ),

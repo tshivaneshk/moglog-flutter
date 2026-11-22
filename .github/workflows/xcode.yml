@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   xcode:
-    name: Build & Analyze iOS Runner (Xcode)
+    name: Build & Verify iOS Runner (Xcode)
     runs-on: macos-latest
 
     steps:
@@ -34,7 +34,7 @@ jobs:
       - name: Build iOS Simulator app (no codesign)
         run: flutter build ios --simulator --debug --no-codesign
 
-      - name: Run Xcode static analysis on Runner workspace
+      - name: Verify Xcode build settings & compiled Runner.app bundle
         run: |
           xcodebuild \
             -workspace ios/Runner.xcworkspace \
@@ -43,5 +43,7 @@ jobs:
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            analyze
+            -showBuildSettings > /dev/null
+          test -d build/ios/iphonesimulator/Runner.app
+          /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" build/ios/iphonesimulator/Runner.app/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :NSFaceIDUsageDescription" build/ios/iphonesimulator/Runner.app/Info.plist

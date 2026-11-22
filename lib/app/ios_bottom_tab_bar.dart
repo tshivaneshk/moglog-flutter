@@ -104,12 +104,17 @@ class IosBottomTabBar extends StatelessWidget {
                                 : Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(
-                                        tab.icon,
-                                        size: (isCompactHeight || isUltraNarrow)
-                                            ? 19
-                                            : 22,
-                                        color: tint,
+                                      AnimatedScale(
+                                        scale: selected ? 1.07 : 1.0,
+                                        duration: const Duration(milliseconds: 180),
+                                        curve: Curves.easeOutCubic,
+                                        child: Icon(
+                                          tab.icon,
+                                          size: (isCompactHeight || isUltraNarrow)
+                                              ? 19
+                                              : 22,
+                                          color: tint,
+                                        ),
                                       ),
                                       if (!isUltraNarrow && !isCompactHeight) ...[
                                         const SizedBox(height: 2),
