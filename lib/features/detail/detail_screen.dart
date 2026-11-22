@@ -40,8 +40,6 @@ class DetailScreen extends ConsumerStatefulWidget {
 
 class _DetailScreenState extends ConsumerState<DetailScreen> {
   final ScrollController _scrollController = ScrollController();
-  final TextEditingController _notesCtrl = TextEditingController();
-  final TextEditingController _tagsCtrl = TextEditingController();
 
   Drama? _drama;
   DramaExtraDetails? _extra;
@@ -49,7 +47,6 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   bool _isSaved = false;
   bool _synopsisExpanded = false;
   Color? _dynamicAccent;
-  double _scrollOffset = 0;
   Timer? _autosaveDebounce;
 
   static const _statuses = ['Watching', 'Planned', 'Done'];
@@ -57,11 +54,6 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(() {
-      if (mounted) {
-        setState(() => _scrollOffset = _scrollController.offset);
-      }
-    });
     _loadData();
   }
 
@@ -73,8 +65,6 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     if (resolved != null) {
       _drama = resolved;
       _isSaved = local != null && !local.isDeleted;
-      _notesCtrl.text = resolved.notes;
-      _tagsCtrl.text = resolved.tags;
       setState(() => _loading = false);
       if (ref.read(currentSettingsProvider).dynamicPosterTint) {
         unawaited(_extractPosterAccent(resolved.posterPath));
@@ -154,12 +144,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     _autosaveDebounce?.cancel();
     _autosaveDebounce = Timer(const Duration(milliseconds: 350), () {
       if (_drama != null && _isSaved) {
-        ref.read(dramaControllerProvider).saveDrama(
-              _drama!.copyWith(
-                notes: _notesCtrl.text,
-                tags: _tagsCtrl.text,
-              ),
-            );
+        ref.read(dramaControllerProvider).saveDrama(_drama!);
       }
     });
   }
@@ -168,9 +153,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     setState(() => _drama = next);
     if (_isSaved) {
       if (immediateSave) {
-        ref.read(dramaControllerProvider).saveDrama(
-              next.copyWith(notes: _notesCtrl.text, tags: _tagsCtrl.text),
-            );
+        ref.read(dramaControllerProvider).saveDrama(next);
       } else {
         _scheduleAutosave();
       }
@@ -183,8 +166,6 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final toSave = d.copyWith(
       isDeleted: false,
       deletedAt: 0,
-      notes: _notesCtrl.text,
-      tags: _tagsCtrl.text,
     );
     ref.read(dramaControllerProvider).saveDrama(toSave);
     setState(() {
@@ -260,11 +241,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final d = _drama;
     if (d == null) return;
     final collections = ref.read(currentSettingsProvider).customCollections;
-    final currentTags = _tagsCtrl.text
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
+    final currentTags = d.tagList.toList();
 
     showIosActionSheet(
       context: context,
@@ -286,8 +263,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               } else {
                 nextTags.add(shelf);
               }
-              _tagsCtrl.text = nextTags.join(', ');
-              _updateDrama(d.copyWith(tags: _tagsCtrl.text), immediateSave: true);
+              _updateDrama(
+                d.copyWith(tags: nextTags.join(', ')),
+                immediateSave: true,
+              );
             },
           ),
       ],
@@ -370,8 +349,6 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   void dispose() {
     _autosaveDebounce?.cancel();
     _scrollController.dispose();
-    _notesCtrl.dispose();
-    _tagsCtrl.dispose();
     super.dispose();
   }
 
@@ -714,17 +691,14 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 
         const SizedBox(height: 16),
 
-        // Personal Rating, Notes/Tags & TMDB Reviews
+        // Personal Rating & Audience / Google Reviews
         RatingAndNotesCard(
           dramaTitle: drama.title,
           myRating: drama.myRating,
-          notesController: _notesCtrl,
-          tagsController: _tagsCtrl,
           reviews: _extra?.reviews ?? const [],
           accentColor: accent,
           onRatingChanged: (r) =>
               _updateDrama(drama.copyWith(myRating: r), immediateSave: true),
-          onNotesOrTagsChanged: _scheduleAutosave,
         ),
 
         const SizedBox(height: 16),
@@ -847,31 +821,79 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
       body: Stack(
         children: [
           if (isLandscape)
-            // Adaptive Landscape 2-Pane Split (34% poster / 66% details)
+            // Adaptive Landscape 2-Pane Split matching Kotlin DetailScreen (34% poster / 66% details)
             SafeArea(
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: MediaQuery.sizeOf(context).width * 0.34,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 56, 8, 16),
-                      child: PosterImage(
-                        url: drama.posterPath,
-                        borderRadius: MoglogShapes.card,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: (MediaQuery.sizeOf(context).width - 32) * 0.34,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                PosterImage(
+                                  url: drama.posterPath,
+                                  borderRadius: MoglogShapes.card,
+                                ),
+                                Positioned(
+                                  top: 10,
+                                  left: 10,
+                                  right: 10,
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      IosCircleIconButton(
+                                        icon: MoglogIcons.chevronLeft,
+                                        tooltip: 'Back',
+                                        backgroundColor:
+                                            Colors.black.withValues(alpha: 0.55),
+                                        tint: Colors.white,
+                                        onTap: widget.onBack,
+                                      ),
+                                      IosCircleIconButton(
+                                        icon: MoglogIcons.moreHorizontal,
+                                        tooltip: 'More actions',
+                                        backgroundColor:
+                                            Colors.black.withValues(alpha: 0.55),
+                                        tint: Colors.white,
+                                        onTap: _showMoreSheet,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (!_isSaved) ...[
+                            const SizedBox(height: 10),
+                            IosPrimaryButton(
+                              text: 'Add to Library',
+                              leadingIcon: MoglogIcons.plus,
+                              backgroundColor: accent,
+                              onTap: _addToLibrary,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 56, 20, 24),
-                      child: detailBody,
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        child: detailBody,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             )
-          else
-            // Portrait full-bleed parallax poster header (translationY = -scroll * 0.35)
+          else ...[
+            // Portrait full-bleed parallax poster header (120Hz AnimatedBuilder scoped to header)
             SingleChildScrollView(
               controller: _scrollController,
               child: Column(
@@ -884,8 +906,17 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                       fit: StackFit.expand,
                       children: [
                         ClipRect(
-                          child: Transform.translate(
-                            offset: Offset(0, -_scrollOffset * 0.35),
+                          child: AnimatedBuilder(
+                            animation: _scrollController,
+                            builder: (_, child) {
+                              final offset = _scrollController.hasClients
+                                  ? _scrollController.offset
+                                  : 0.0;
+                              return Transform.translate(
+                                offset: Offset(0, -offset * 0.35),
+                                child: child,
+                              );
+                            },
                             child: PosterImage(
                               url: drama.posterPath,
                               borderRadius: BorderRadius.zero,
@@ -918,60 +949,61 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               ),
             ),
 
-          // Floating top navigation bar (Back + More)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IosCircleIconButton(
-                      icon: MoglogIcons.chevronLeft,
-                      tooltip: 'Back',
-                      backgroundColor: Colors.black.withValues(alpha: 0.55),
-                      tint: Colors.white,
-                      onTap: widget.onBack,
-                    ),
-                    IosCircleIconButton(
-                      icon: MoglogIcons.moreHorizontal,
-                      tooltip: 'More actions',
-                      backgroundColor: Colors.black.withValues(alpha: 0.55),
-                      tint: Colors.white,
-                      onTap: _showMoreSheet,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Sticky bottom Add to Library bar for unsaved shows
-          if (!_isSaved)
+            // Floating top navigation bar (Back + More)
             Positioned(
+              top: 0,
               left: 0,
               right: 0,
-              bottom: 0,
-              child: IosFrostedBar(
-                showTopBorder: true,
-                child: SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                    child: IosPrimaryButton(
-                      text: 'Add to Library',
-                      leadingIcon: MoglogIcons.plus,
-                      backgroundColor: accent,
-                      onTap: _addToLibrary,
-                    ),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IosCircleIconButton(
+                        icon: MoglogIcons.chevronLeft,
+                        tooltip: 'Back',
+                        backgroundColor: Colors.black.withValues(alpha: 0.55),
+                        tint: Colors.white,
+                        onTap: widget.onBack,
+                      ),
+                      IosCircleIconButton(
+                        icon: MoglogIcons.moreHorizontal,
+                        tooltip: 'More actions',
+                        backgroundColor: Colors.black.withValues(alpha: 0.55),
+                        tint: Colors.white,
+                        onTap: _showMoreSheet,
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
+
+            // Sticky bottom Add to Library bar for unsaved shows
+            if (!_isSaved)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: IosFrostedBar(
+                  showTopBorder: true,
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                      child: IosPrimaryButton(
+                        text: 'Add to Library',
+                        leadingIcon: MoglogIcons.plus,
+                        backgroundColor: accent,
+                        onTap: _addToLibrary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );

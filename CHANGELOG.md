@@ -20,3 +20,12 @@ All notable changes to the Flutter migration of Moglog (`D:\Antigravity\Moglog\m
 - **Phase 4 (Verification & Tests):**
   - 25 unit & widget tests covering `MOGLOG_ENC_V1` crypto vectors, filtering/sorting/LWW merge, CSV injection defense & TV Time/Trakt parsing, 13 Prestige Tiers, Taste Blend, version checker, SQLite CRUD + 30-day Recycle Bin purge, and key screens.
   - `flutter analyze`: 0 issues; `flutter test`: 25/25 passing.
+
+### Changed / Fixed
+- **Firebase & Google Sign-In:** Updated `android/app/google-services.json` (git-ignored) with the Android OAuth client (`client_type: 1`) SHA-1 registration for `com.skech.moglog.flutter`.
+- **1:1 Kotlin Parity — Personal Notes & Tags Removed:** Replaced the Personal Notes & Tags inputs in `RatingAndNotesCard` / `DetailScreen` / `LibraryScreen` with Kotlin's exact My Rating (with `Clear` button) + Audience Reviews & Google Reviews card.
+- **120Hz Scroll & Render Optimization:**
+  - Removed full-screen `DetailScreen` `setState` rebuilds on every scroll pixel (replaced with scoped `AnimatedBuilder` for parallax header).
+  - Removed live `ImageFilter.blur` `BackdropFilter` from `IosFrostedBar` (matching Kotlin's translucent surface without per-frame GPU blur overdraw).
+  - Added DPR-scaled `memCacheWidth` / `memCacheHeight` sizing to `PosterImage` and `onWindowFocusChanged` 120Hz display mode enforcement in `MainActivity.kt`.
+- **Pop-up Window & Landscape Parity:** Added `<layout>` freeform window size hints (`minWidth="200dp"`, `minHeight="240dp"`) to `AndroidManifest.xml`, compact pop-up collapse logic to `IosLargeTitleHeader`, side-by-side landscape Search + Status bar & adaptive grid to `LibraryScreen`, 2-pane landscape actions to `DetailScreen`, and `maxWidth: 780` centering to `WatchCircleScreen`.

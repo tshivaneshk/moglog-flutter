@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +8,7 @@ import 'shapes.dart';
 import 'theme.dart';
 
 /// Translucent frosted iOS navigation/tab bar matching Kotlin `IosFrostedBar`.
+/// Uses pure translucent surface without expensive live BackdropFilter overdraw so 120Hz scrolling stays locked.
 class IosFrostedBar extends StatelessWidget {
   final Widget child;
   final bool showTopBorder;
@@ -25,29 +24,25 @@ class IosFrostedBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: c.frostedBarSurface,
-            border: Border(
-              top: showTopBorder
-                  ? BorderSide(color: c.separator, width: c.hairlineWidth)
-                  : BorderSide.none,
-              bottom: showBottomBorder
-                  ? BorderSide(color: c.separator, width: c.hairlineWidth)
-                  : BorderSide.none,
-            ),
-          ),
-          child: child,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: c.frostedBarSurface,
+        border: Border(
+          top: showTopBorder
+              ? BorderSide(color: c.separator, width: c.hairlineWidth)
+              : BorderSide.none,
+          bottom: showBottomBorder
+              ? BorderSide(color: c.separator, width: c.hairlineWidth)
+              : BorderSide.none,
         ),
       ),
+      child: child,
     );
   }
 }
 
 /// Collapsing iOS Large Title Header matching Kotlin `IosLargeTitleHeader`.
+/// Automatically collapses to an inline compact bar in landscape or pop-up multi-window mode.
 class IosLargeTitleHeader extends StatelessWidget {
   final String title;
   final bool collapsed;
@@ -66,71 +61,93 @@ class IosLargeTitleHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
+    final size = MediaQuery.sizeOf(context);
+    final isLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final isCompactWindow = size.height < 460 || size.width < 280;
+    final effectiveCollapsed = collapsed || isLandscape || isCompactWindow;
+    final hPad = size.width < 320 ? 12.0 : 16.0;
+    final inlineNoLeading =
+        (isLandscape || isCompactWindow) && leadingActions == null;
 
     return IosFrostedBar(
-      showBottomBorder: collapsed,
+      showBottomBorder: effectiveCollapsed,
       child: SafeArea(
         bottom: false,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.fromLTRB(
-            16,
-            collapsed ? 8 : 10,
-            16,
-            collapsed ? 10 : 8,
+            hPad,
+            effectiveCollapsed ? 6 : 10,
+            hPad,
+            effectiveCollapsed ? 8 : 8,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  if (leadingActions != null) ...[
-                    leadingActions!,
-                    const SizedBox(width: 10),
-                  ],
-                  Expanded(
-                    child: AnimatedOpacity(
-                      opacity: collapsed ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 160),
-                      child: collapsed
-                          ? Text(
-                              title,
-                              style: t.headline.copyWith(color: c.label),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-                  ),
-                  if (trailingActions != null && trailingActions!.isNotEmpty)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (var i = 0; i < trailingActions!.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 8),
-                          trailingActions![i],
+              SizedBox(
+                height: (isLandscape || isCompactWindow) ? 40 : 44,
+                child: Row(
+                  children: [
+                    if (leadingActions != null) ...[
+                      leadingActions!,
+                      const SizedBox(width: 8),
+                    ],
+                    if (inlineNoLeading)
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: (size.width < 300 ? t.headline : t.title3)
+                              .copyWith(color: c.label),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: AnimatedOpacity(
+                          opacity: effectiveCollapsed ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 150),
+                          child: effectiveCollapsed
+                              ? Text(
+                                  title,
+                                  style: t.headline.copyWith(color: c.label),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ),
+                    if (trailingActions != null && trailingActions!.isNotEmpty)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var i = 0; i < trailingActions!.length; i++) ...[
+                            if (i > 0) SizedBox(width: size.width < 320 ? 6 : 8),
+                            trailingActions![i],
+                          ],
                         ],
-                      ],
-                    ),
-                ],
-              ),
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 180),
-                crossFadeState: collapsed
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
-                firstChild: Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    title,
-                    style: t.largeTitle.copyWith(color: c.label),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                      ),
+                  ],
                 ),
-                secondChild: const SizedBox.shrink(),
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topLeft,
+                child: effectiveCollapsed
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 2, bottom: 4),
+                        child: Text(
+                          title,
+                          style: t.largeTitle.copyWith(color: c.label),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
               ),
             ],
           ),
@@ -1046,6 +1063,12 @@ class PosterImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
+    final cacheW =
+        width != null && width!.isFinite ? (width! * dpr).round().clamp(96, 720) : 540;
+    final cacheH =
+        height != null && height!.isFinite ? (height! * dpr).round().clamp(96, 1080) : null;
+
     final placeholder = Container(
       width: width,
       height: height,
@@ -1063,6 +1086,8 @@ class PosterImage extends StatelessWidget {
               width: width,
               height: height,
               fit: fit,
+              memCacheWidth: cacheW,
+              memCacheHeight: cacheH,
               fadeInDuration: const Duration(milliseconds: 120),
               placeholder: (_, __) => Container(
                 width: width,

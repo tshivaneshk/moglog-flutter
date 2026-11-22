@@ -577,6 +577,8 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
         .take(4)
         .toList();
 
+    final isLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
     final coWatchPairs = TasteBlendCalculator.buildCoWatchPairs(
       myDramas,
       authState.circleFriends,
@@ -633,8 +635,13 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
                     onRefresh: () => ref
                         .read(authControllerProvider.notifier)
                         .refreshWatchCircle(),
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 48),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: isLandscape ? 780 : double.infinity,
+                        ),
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 48),
                       children: [
                         // 1. My Watch Circle Pass Card
                         _MyPassCard(
@@ -932,9 +939,11 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
                             ),
                             const SizedBox(height: 12),
                           ],
-                      ],
+                        ],
+                      ),
                     ),
                   ),
+                ),
           ),
         ],
       ),

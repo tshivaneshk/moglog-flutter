@@ -328,14 +328,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }.toList()
       ..sort();
 
+    final size = MediaQuery.sizeOf(context);
+    final screenWidthDp = size.width;
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
-    final effectiveColumns = isLandscape
-        ? (settings.gridColumns + 2).clamp(4, 6)
-        : settings.gridColumns;
+    final effectiveColumns = screenWidthDp < 240
+        ? 2
+        : screenWidthDp < 320
+            ? settings.gridColumns.clamp(2, 3)
+            : settings.gridColumns.clamp(2, 4);
 
     final statusLabels = _statuses.map((s) {
-      if (s == selectedStatus) {
+      if (s == selectedStatus && screenWidthDp >= 290) {
         return '$s (${filtered.length})';
       }
       return s;
@@ -434,7 +438,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                         icon: MoglogIcons.library,
                         title: 'Your Library is Empty',
                         subtitle:
-                            'Track your favorite series, episode progress, ratings, and personal notes in one clean place.',
+                            'Track your favorite series, episode progress, ratings, and collections in one clean place.',
                         actionLabel: 'Discover Shows',
                         onAction: widget.onNavigateToDiscover,
                       ),
@@ -443,35 +447,81 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 : CustomScrollView(
                     controller: _scrollController,
                     slivers: [
-                      // Search bar + Status segmented control + Collection Shelves
+                      // Search bar + Status segmented control (side-by-side in landscape >= 480dp matching Kotlin)
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
-                          child: Column(
-                            children: [
-                              IosSearchBar(
-                                controller: _searchController,
-                                placeholder: 'Search your library',
-                                onChanged: (v) {
-                                  ref
-                                      .read(librarySearchQueryProvider.notifier)
-                                      .state = v;
-                                  setState(() {});
-                                },
-                              ),
-                              const SizedBox(height: 10),
-                              IosSegmentedControl(
-                                labels: statusLabels,
-                                selectedIndex:
-                                    _statuses.indexOf(selectedStatus).clamp(0, 3),
-                                onSelected: (i) {
-                                  ref
-                                      .read(librarySelectedStatusProvider.notifier)
-                                      .state = _statuses[i];
-                                },
-                              ),
-                            ],
-                          ),
+                          child: (isLandscape && screenWidthDp >= 480)
+                              ? Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 45,
+                                      child: IosSearchBar(
+                                        controller: _searchController,
+                                        placeholder: 'Search your library',
+                                        onChanged: (v) {
+                                          ref
+                                              .read(
+                                                librarySearchQueryProvider
+                                                    .notifier,
+                                              )
+                                              .state = v;
+                                          setState(() {});
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      flex: 55,
+                                      child: IosSegmentedControl(
+                                        labels: statusLabels,
+                                        selectedIndex: _statuses
+                                            .indexOf(selectedStatus)
+                                            .clamp(0, 3),
+                                        onSelected: (i) {
+                                          ref
+                                              .read(
+                                                librarySelectedStatusProvider
+                                                    .notifier,
+                                              )
+                                              .state = _statuses[i];
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    IosSearchBar(
+                                      controller: _searchController,
+                                      placeholder: 'Search your library',
+                                      onChanged: (v) {
+                                        ref
+                                            .read(
+                                              librarySearchQueryProvider
+                                                  .notifier,
+                                            )
+                                            .state = v;
+                                        setState(() {});
+                                      },
+                                    ),
+                                    const SizedBox(height: 10),
+                                    IosSegmentedControl(
+                                      labels: statusLabels,
+                                      selectedIndex: _statuses
+                                          .indexOf(selectedStatus)
+                                          .clamp(0, 3),
+                                      onSelected: (i) {
+                                        ref
+                                            .read(
+                                              librarySelectedStatusProvider
+                                                  .notifier,
+                                            )
+                                            .state = _statuses[i];
+                                      },
+                                    ),
+                                  ],
+                                ),
                         ),
                       ),
 
@@ -571,15 +621,41 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                         )
                       else if (settings.layoutMode == LibraryLayoutMode.grid)
                         SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 104),
+                          padding: EdgeInsets.fromLTRB(
+                            (effectiveColumns >= 4 || screenWidthDp < 340)
+                                ? 12
+                                : 16,
+                            10,
+                            (effectiveColumns >= 4 || screenWidthDp < 340)
+                                ? 12
+                                : 16,
+                            104,
+                          ),
                           sliver: SliverGrid(
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: effectiveColumns,
-                              mainAxisSpacing: 14,
-                              crossAxisSpacing: 11,
-                              childAspectRatio: 0.58,
-                            ),
+                            gridDelegate: isLandscape
+                                ? SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent:
+                                        screenWidthDp < 480 ? 115 : 140,
+                                    mainAxisSpacing:
+                                        screenWidthDp < 340 ? 12 : 16,
+                                    crossAxisSpacing:
+                                        screenWidthDp < 340 ? 8 : 12,
+                                    childAspectRatio: 0.58,
+                                  )
+                                : SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: effectiveColumns,
+                                    mainAxisSpacing:
+                                        (effectiveColumns >= 4 ||
+                                                screenWidthDp < 340)
+                                            ? 12
+                                            : 16,
+                                    crossAxisSpacing:
+                                        (effectiveColumns >= 4 ||
+                                                screenWidthDp < 340)
+                                            ? 8
+                                            : 12,
+                                    childAspectRatio: 0.58,
+                                  ),
                             delegate: SliverChildBuilderDelegate(
                               (context, index) {
                                 final drama = filtered[index];
