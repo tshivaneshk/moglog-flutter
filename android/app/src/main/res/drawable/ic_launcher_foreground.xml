@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Subtle stacked card accent bar -->
+    <path
+        android:fillColor="#6630D158"
+        android:pathData="M36,31h36c2.21,0 4,1.79 4,4v2H32v-2c0,-2.21 1.79,-4 4,-4z" />
+    <!-- Primary rounded screen frame in iOS System Green (#30D158) -->
+    <path
+        android:fillColor="#30D158"
+        android:pathData="M33,38h42c3.87,0 7,3.13 7,7v24c0,3.87 -3.13,7 -7,7H33c-3.87,0 -7,-3.13 -7,-7V45c0,-3.87 3.13,-7 7,-7z" />
+    <!-- Crisp dark play glyph inside screen -->
+    <path
+        android:fillColor="#111113"
+        android:pathData="M48,48.5v17L63,57z" />
+</vector>

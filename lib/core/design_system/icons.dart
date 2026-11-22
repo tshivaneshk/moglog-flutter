@@ -1,0 +1,55 @@
+import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+/// All 36+ Lucide rounded-outline icons matching Kotlin `MoglogIcons` 1:1.
+class MoglogIcons {
+  static const IconData library = LucideIcons.clapperboard;
+  static const IconData discover = LucideIcons.compass;
+  static const IconData stats = LucideIcons.chartColumn;
+  static const IconData settings = LucideIcons.settings;
+  static const IconData search = LucideIcons.search;
+  static const IconData plus = LucideIcons.plus;
+  static const IconData minus = LucideIcons.minus;
+  static const IconData check = LucideIcons.check;
+  static const IconData close = LucideIcons.x;
+  static const IconData chevronLeft = LucideIcons.chevronLeft;
+  static const IconData chevronRight = LucideIcons.chevronRight;
+  static const IconData moreHorizontal = LucideIcons.ellipsis;
+  static const IconData starFilled = Icons.star_rounded;
+  static const IconData starOutline = LucideIcons.star;
+  static const IconData filter = LucideIcons.slidersHorizontal;
+  static const IconData grid = LucideIcons.layoutGrid;
+  static const IconData listRows = LucideIcons.list;
+  static const IconData trash = LucideIcons.trash2;
+  static const IconData share = LucideIcons.share2;
+  static const IconData play = LucideIcons.play;
+  static const IconData externalLink = LucideIcons.externalLink;
+  static const IconData lock = LucideIcons.lock;
+  static const IconData shield = LucideIcons.shieldCheck;
+  static const IconData cloud = LucideIcons.cloud;
+  static const IconData key = LucideIcons.keyRound;
+  static const IconData note = LucideIcons.stickyNote;
+  static const IconData refresh = LucideIcons.refreshCw;
+  static const IconData bell = LucideIcons.bell;
+  static const IconData person = LucideIcons.user;
+  static const IconData sunMoon = LucideIcons.sunMoon;
+  static const IconData download = LucideIcons.download;
+  static const IconData upload = LucideIcons.upload;
+  static const IconData users = LucideIcons.users;
+  static const IconData sparkles = LucideIcons.sparkles;
+  static const IconData copy = LucideIcons.copy;
+  static const IconData zap = LucideIcons.zap;
+  static const IconData eyeOff = LucideIcons.eyeOff;
+  static const IconData eye = LucideIcons.eye;
+  static const IconData camera = LucideIcons.camera;
+  static const IconData photo = LucideIcons.image;
+  static const IconData calendar = LucideIcons.calendar;
+  static const IconData clock = LucideIcons.clock;
+  static const IconData bookmark = LucideIcons.bookmark;
+  static const IconData bookmarkFilled = Icons.bookmark_rounded;
+  static const IconData award = LucideIcons.award;
+  static const IconData trendingUp = LucideIcons.trendingUp;
+  static const IconData flame = LucideIcons.flame;
+  static const IconData rotateCcw = LucideIcons.rotateCcw;
+  static const IconData checkSquare = LucideIcons.squareCheck;
+}
