@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../domain/model/drama.dart';
 import 'icons.dart';
 import 'motion_haptics.dart';
 import 'shapes.dart';
@@ -1228,12 +1231,14 @@ class _ShimmerBoxState extends State<ShimmerBox>
   }
 }
 
-class PosterImage extends StatelessWidget {
+class PosterImage extends StatefulWidget {
   final String url;
   final double? width;
   final double? height;
   final BorderRadius borderRadius;
   final BoxFit fit;
+  final AlignmentGeometry alignment;
+  final bool isCircular;
 
   const PosterImage({
     super.key,
@@ -1242,44 +1247,92 @@ class PosterImage extends StatelessWidget {
     this.height,
     this.borderRadius = MoglogShapes.poster,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
+    this.isCircular = false,
   });
+
+  @override
+  State<PosterImage> createState() => _PosterImageState();
+}
+
+class _PosterImageState extends State<PosterImage> {
+  int _retryCount = 0;
+  Timer? _retryTimer;
+
+  @override
+  void didUpdateWidget(covariant PosterImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _retryTimer?.cancel();
+      _retryCount = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleRetry() {
+    if (_retryCount >= 2 || (_retryTimer?.isActive ?? false)) return;
+    _retryTimer = Timer(Duration(milliseconds: 700 * (_retryCount + 1)), () {
+      if (!mounted) return;
+      setState(() => _retryCount++);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
-    final cacheW =
-        width != null && width!.isFinite ? (width! * dpr).round().clamp(96, 720) : 540;
-    final cacheH =
-        height != null && height!.isFinite ? (height! * dpr).round().clamp(96, 1080) : null;
+    final cacheW = widget.width != null && widget.width!.isFinite
+        ? (widget.width! * dpr).round().clamp(96, 720)
+        : 540;
+    final normalizedUrl = normalizePosterUrl(widget.url);
 
     final placeholder = Container(
-      width: width,
-      height: height,
+      width: widget.width,
+      height: widget.height,
       color: c.tertiaryBackground,
       alignment: Alignment.center,
       child: Icon(MoglogIcons.library, size: 22, color: c.tertiaryLabel),
     );
 
-    return ClipRRect(
-      borderRadius: borderRadius,
-      child: url.trim().isEmpty
-          ? placeholder
-          : CachedNetworkImage(
-              imageUrl: url,
-              width: width,
-              height: height,
-              fit: fit,
-              memCacheWidth: cacheW,
-              memCacheHeight: cacheH,
-              fadeInDuration: const Duration(milliseconds: 120),
-              placeholder: (_, __) => Container(
-                width: width,
-                height: height,
-                color: c.tertiaryBackground,
-              ),
-              errorWidget: (_, __, ___) => placeholder,
+    final Widget imageWidget = normalizedUrl.isEmpty
+        ? placeholder
+        : CachedNetworkImage(
+            key: ValueKey('${normalizedUrl}_r$_retryCount'),
+            imageUrl: normalizedUrl,
+            width: widget.width,
+            height: widget.height,
+            fit: widget.fit,
+            alignment: widget.alignment is Alignment
+                ? widget.alignment as Alignment
+                : Alignment.center,
+            memCacheWidth: cacheW,
+            fadeInDuration: const Duration(milliseconds: 120),
+            placeholder: (_, __) => Container(
+              width: widget.width,
+              height: widget.height,
+              color: c.tertiaryBackground,
             ),
+            errorWidget: (_, __, ___) {
+              WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleRetry());
+              return placeholder;
+            },
+          );
+
+    if (widget.isCircular) {
+      return SizedBox.square(
+        dimension: widget.width ?? widget.height ?? 64,
+        child: ClipOval(child: imageWidget),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: widget.borderRadius,
+      child: imageWidget,
     );
   }
 }

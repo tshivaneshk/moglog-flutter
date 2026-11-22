@@ -1,5 +1,16 @@
 import 'dart:math';
 
+/// Normalizes TMDB or external poster URLs so relative `/abc.jpg` paths always resolve.
+String normalizePosterUrl(String? raw) {
+  final s = (raw ?? '').trim();
+  if (s.isEmpty) return '';
+  if (s.startsWith('https://')) return s;
+  if (s.startsWith('http://')) return 'https://${s.substring(7)}';
+  if (s.startsWith('//')) return 'https:$s';
+  if (s.startsWith('/')) return 'https://image.tmdb.org/t/p/w500$s';
+  return 'https://image.tmdb.org/t/p/w500/$s';
+}
+
 /// Core TV show / drama domain model matching Kotlin `Drama` 1:1,
 /// including exact Gson JSON field names for Firestore & `.moglog` compatibility.
 class Drama {
@@ -188,7 +199,9 @@ class Drama {
       title: (json['title'] as String?) ?? '',
       overview: (json['overview'] as String?) ?? '',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-      posterPath: (json['posterPath'] as String?) ?? '',
+      posterPath: normalizePosterUrl(
+        (json['posterPath'] ?? json['poster_path']) as String?,
+      ),
       status: (json['status'] as String?) ?? 'Planned',
       episodesWatched: (json['episodesWatched'] as num?)?.toInt() ?? 0,
       totalEpisodes: (json['totalEpisodes'] as num?)?.toInt() ?? 0,

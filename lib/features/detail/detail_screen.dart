@@ -808,9 +808,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                     children: [
                       PosterImage(
                         url: member.profilePath ?? '',
-                        width: 66,
-                        height: 66,
-                        borderRadius: MoglogShapes.pill,
+                        width: 64,
+                        height: 64,
+                        isCircular: true,
+                        alignment: const Alignment(0, -0.2),
                       ),
                       const SizedBox(height: 6),
                       Text(

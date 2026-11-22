@@ -275,6 +275,18 @@ void main() {
       expect(shareText, contains('https://moglog-instructions.vercel.app'));
     });
 
+    test('normalizePosterUrl converts relative TMDB paths to HTTPS full URLs', () {
+      expect(
+        normalizePosterUrl('/abc123.jpg'),
+        'https://image.tmdb.org/t/p/w500/abc123.jpg',
+      );
+      expect(
+        normalizePosterUrl('http://image.tmdb.org/t/p/w500/xyz.jpg'),
+        'https://image.tmdb.org/t/p/w500/xyz.jpg',
+      );
+      expect(normalizePosterUrl(''), '');
+    });
+
     test('TMDB credential validator blocks compromised legacy key and validates v3/v4', () {
       expect(
         SecureStore.isValidTmdbCredentialFormat('b30d871ab7f51c18054f0e6d0921da16'),

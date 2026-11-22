@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -184,13 +185,61 @@ class _AdvancedSettingsScreenState
   }
 
   Future<void> _performExport({String? passphrase}) async {
+    final toastNotifier = ref.read(toastProvider.notifier);
+    final dramaCtrl = ref.read(dramaControllerProvider);
+    final count =
+        ref.read(currentDramasProvider).where((d) => !d.isDeleted).length;
+    final isEnc = passphrase != null && passphrase.isNotEmpty;
+
+    BuildContext? dialogCtx;
+    if (mounted) {
+      unawaited(
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          useRootNavigator: true,
+          builder: (ctx) {
+            dialogCtx = ctx;
+            final c = ctx.colors;
+            final t = ctx.typo;
+            return AlertDialog(
+              backgroundColor: c.secondaryBackground,
+              shape: const RoundedRectangleBorder(borderRadius: MoglogShapes.card),
+              content: Row(
+                children: [
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: c.accent,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      isEnc ? 'Encrypting backup…' : 'Preparing CSV export…',
+                      style: t.subhead.copyWith(color: c.label),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    }
+
     try {
-      final isEnc = passphrase != null && passphrase.isNotEmpty;
-      final bytes = await ref
-          .read(dramaControllerProvider)
-          .buildExportBytes(passphrase: passphrase);
+      final bytes = await dramaCtrl.buildExportBytes(passphrase: passphrase);
+      if (dialogCtx != null && dialogCtx!.mounted) {
+        Navigator.of(dialogCtx!, rootNavigator: true).pop();
+        dialogCtx = null;
+      }
+
       final ts = DateTime.now().millisecondsSinceEpoch;
-      final fileName = isEnc ? 'moglog_backup_$ts.moglog' : 'moglog_library_$ts.csv';
+      final fileName =
+          isEnc ? 'moglog_backup_$ts.moglog' : 'moglog_library_$ts.csv';
 
       final savedPath = await FilePicker.platform.saveFile(
         dialogTitle: 'Save Moglog Backup',
@@ -198,20 +247,24 @@ class _AdvancedSettingsScreenState
         bytes: bytes,
       );
       if (savedPath != null && savedPath.isNotEmpty) {
-        try {
-          final f = File(savedPath);
-          if (!await f.exists() || await f.length() == 0) {
-            await f.writeAsBytes(bytes);
-          }
-        } catch (_) {}
-        final count =
-            ref.read(currentDramasProvider).where((d) => !d.isDeleted).length;
-        ref.read(toastProvider.notifier).show(
-              'Exported $count shows (${isEnc ? "encrypted .moglog" : "CSV spreadsheet"}).',
-            );
+        if (!Platform.isAndroid && !Platform.isIOS) {
+          try {
+            final f = File(savedPath);
+            if (!await f.exists() || await f.length() == 0) {
+              await f.writeAsBytes(bytes);
+            }
+          } catch (_) {}
+        }
+        toastNotifier.show(
+          'Exported $count show${count == 1 ? "" : "s"} (${isEnc ? ".moglog backup" : "CSV file"})',
+          duration: const Duration(seconds: 4),
+        );
       }
     } catch (e) {
-      ref.read(toastProvider.notifier).show('Export failed: $e');
+      if (dialogCtx != null && dialogCtx!.mounted) {
+        Navigator.of(dialogCtx!, rootNavigator: true).pop();
+      }
+      toastNotifier.show('Export failed: $e');
     }
   }
 
@@ -334,15 +387,124 @@ class _AdvancedSettingsScreenState
   }
 
   Future<void> _executeImport(Uint8List bytes, {String? passphrase}) async {
-    final summary = await ref
-        .read(dramaControllerProvider)
-        .importBackupBytes(bytes, passphrase: passphrase);
-    if (summary.errorMessage != null) {
-      ref.read(toastProvider.notifier).show(summary.errorMessage!);
-    } else {
-      ref.read(toastProvider.notifier).show(
-            'Imported: ${summary.added} added, ${summary.updated} updated, ${summary.skipped} skipped.',
+    final toastNotifier = ref.read(toastProvider.notifier);
+    final dramaCtrl = ref.read(dramaControllerProvider);
+    final progress = ValueNotifier<({String stage, int done, int total})>(
+      (stage: 'Reading backup…', done: 0, total: 0),
+    );
+
+    BuildContext? dialogCtx;
+    if (mounted) {
+      unawaited(
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          useRootNavigator: true,
+          builder: (ctx) {
+            dialogCtx = ctx;
+            final c = ctx.colors;
+            final t = ctx.typo;
+            return AlertDialog(
+              backgroundColor: c.secondaryBackground,
+              shape: const RoundedRectangleBorder(borderRadius: MoglogShapes.card),
+              content: ValueListenableBuilder<
+                  ({String stage, int done, int total})>(
+                valueListenable: progress,
+                builder: (_, state, __) {
+                  final fraction = state.total > 0
+                      ? (state.done / state.total).clamp(0.0, 1.0)
+                      : null;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: c.accent,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              'Importing Library',
+                              style: t.headline.copyWith(color: c.label),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        state.total > 0
+                            ? '${state.stage} (${state.done} / ${state.total})'
+                            : state.stage,
+                        style: t.caption.copyWith(
+                          color: c.secondaryLabel,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 10),
+                      ClipRRect(
+                        borderRadius: MoglogShapes.pill,
+                        child: LinearProgressIndicator(
+                          value: fraction,
+                          minHeight: 5,
+                          backgroundColor: c.tertiaryBackground,
+                          color: c.accent,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    try {
+      final summary = await dramaCtrl.importBackupBytes(
+        bytes,
+        passphrase: passphrase,
+        onProgress: (stage, done, total) {
+          progress.value = (stage: stage, done: done, total: total);
+        },
+      );
+      if (dialogCtx != null && dialogCtx!.mounted) {
+        Navigator.of(dialogCtx!, rootNavigator: true).pop();
+        dialogCtx = null;
+      }
+
+      if (summary.errorMessage != null) {
+        toastNotifier.show(summary.errorMessage!);
+      } else {
+        final totalLoaded = summary.added + summary.updated;
+        if (totalLoaded > 0) {
+          toastNotifier.show(
+            '$totalLoaded show${totalLoaded == 1 ? "" : "s"} loaded into library',
+            duration: const Duration(seconds: 4),
           );
+        } else {
+          toastNotifier.show(
+            'All ${summary.skipped} shows already up to date in library',
+            duration: const Duration(seconds: 4),
+          );
+        }
+      }
+    } catch (e) {
+      if (dialogCtx != null && dialogCtx!.mounted) {
+        Navigator.of(dialogCtx!, rootNavigator: true).pop();
+      }
+      toastNotifier.show('Import failed: $e');
+    } finally {
+      progress.dispose();
     }
   }
 

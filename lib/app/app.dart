@@ -147,21 +147,24 @@ class _MoglogAppState extends ConsumerState<MoglogApp> {
                 left: 16,
                 right: 16,
                 bottom: 92,
-                child: SafeArea(
-                  top: false,
-                  child: Center(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      child: IosToastBanner(
-                        key: ValueKey(toast.id),
-                        message: toast.message,
-                        actionLabel: toast.actionLabel,
-                        onAction: toast.onAction != null
-                            ? () {
-                                toast.onAction!();
-                                ref.read(toastProvider.notifier).dismiss();
-                              }
-                            : null,
+                child: IgnorePointer(
+                  ignoring: toast.onAction == null,
+                  child: SafeArea(
+                    top: false,
+                    child: Center(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        child: IosToastBanner(
+                          key: ValueKey(toast.id),
+                          message: toast.message,
+                          actionLabel: toast.actionLabel,
+                          onAction: toast.onAction != null
+                              ? () {
+                                  toast.onAction!();
+                                  ref.read(toastProvider.notifier).dismiss();
+                                }
+                              : null,
+                        ),
                       ),
                     ),
                   ),

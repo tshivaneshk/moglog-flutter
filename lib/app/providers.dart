@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -645,6 +646,7 @@ class DramaController {
   Future<ImportSummary> importBackupBytes(
     Uint8List bytes, {
     String? passphrase,
+    void Function(String stage, int done, int total)? onProgress,
   }) async {
     const maxBytes = 10 * 1024 * 1024;
     if (bytes.length > maxBytes) {
@@ -667,9 +669,10 @@ class DramaController {
 
     final trimmedStart = rawText.trimLeft();
     if (!trimmedStart.startsWith('[') && !trimmedStart.startsWith('{')) {
-      return _importCsvHistory(rawText);
+      return _importCsvHistory(rawText, onProgress: onProgress);
     }
 
+    onProgress?.call('Decrypting backup…', 0, 1);
     final envelope = BackupCryptoEnvelope.parseEnvelopeOrNull(rawText);
     if (envelope == null) {
       return const ImportSummary(
@@ -707,6 +710,7 @@ class DramaController {
     final imported = CloudSyncRepository.parseDramasFromJson(decryptedJson);
     final localMap = {for (final d in _repo.getAllDramasSync()) d.id: d};
     final seenIds = <int>{};
+    final toSave = <Drama>[];
     var added = 0;
     var updated = 0;
     var skipped = 0;
@@ -718,6 +722,7 @@ class DramaController {
         continue;
       }
       final sanitized = incoming.copyWith(
+        posterPath: normalizePosterUrl(incoming.posterPath),
         rating: incoming.rating.clamp(0.0, 10.0),
         myRating: incoming.myRating.clamp(0.0, 10.0),
         episodesWatched: incoming.episodesWatched < 0 ? 0 : incoming.episodesWatched,
@@ -728,19 +733,72 @@ class DramaController {
       );
       final existing = localMap[sanitized.id];
       if (existing == null) {
-        _repo.saveDrama(sanitized);
+        toSave.add(sanitized);
         added++;
-      } else if (sanitized.updatedAt > existing.updatedAt) {
-        _repo.saveDrama(sanitized);
+      } else if (sanitized.updatedAt > existing.updatedAt ||
+          (existing.posterPath.isEmpty && sanitized.posterPath.isNotEmpty)) {
+        toSave.add(sanitized);
         updated++;
       } else {
         skipped++;
       }
     }
+
+    // Backfill any shows missing poster URLs if TMDB key is configured
+    final hasKey = _secure.getTmdbCredential().isNotEmpty;
+    if (hasKey) {
+      final missingIndices = <int>[
+        for (var i = 0; i < toSave.length; i++)
+          if (toSave[i].posterPath.isEmpty && toSave[i].id > 0) i,
+      ];
+      if (missingIndices.isNotEmpty) {
+        var resolvedDone = 0;
+        onProgress?.call('Fetching show metadata…', 0, missingIndices.length);
+        await _runInPool<int>(
+          missingIndices,
+          concurrency: 6,
+          task: (idx) async {
+            final d = toSave[idx];
+            final details = await _repo.getDramaDetails(d.id);
+            if (details != null && details.posterPath.isNotEmpty) {
+              toSave[idx] = d.copyWith(
+                posterPath: normalizePosterUrl(details.posterPath),
+                rating: d.rating > 0 ? d.rating : details.rating,
+                totalEpisodes:
+                    d.totalEpisodes > 0 ? d.totalEpisodes : details.totalEpisodes,
+              );
+            }
+            resolvedDone++;
+            onProgress?.call(
+              'Fetching show metadata…',
+              resolvedDone,
+              missingIndices.length,
+            );
+          },
+        );
+      }
+    }
+
+    for (final d in toSave) {
+      _repo.saveDrama(d);
+    }
+
+    final allPosters = toSave
+        .map((d) => normalizePosterUrl(d.posterPath))
+        .where((u) => u.isNotEmpty)
+        .toSet()
+        .toList();
+    if (allPosters.isNotEmpty) {
+      await _prewarmPosters(allPosters, onProgress: onProgress);
+    }
+
     return ImportSummary(added: added, updated: updated, skipped: skipped);
   }
 
-  Future<ImportSummary> _importCsvHistory(String rawCsv) async {
+  Future<ImportSummary> _importCsvHistory(
+    String rawCsv, {
+    void Function(String stage, int done, int total)? onProgress,
+  }) async {
     final grouped = parseCsvHistoryRows(rawCsv);
     if (grouped.isEmpty) {
       return const ImportSummary(
@@ -755,49 +813,92 @@ class DramaController {
     final localById = {for (final d in localAll) d.id: d};
     final localByTitle = {for (final d in localAll) d.title.toLowerCase(): d};
     final now = DateTime.now().millisecondsSinceEpoch;
+    final hasKey = _secure.getTmdbCredential().isNotEmpty;
+
+    final entriesToLookup = <ParsedCsvShowRow>[];
+    final existingToCheck = <(Drama, ParsedCsvShowRow)>[];
+    for (final entry in grouped.entries) {
+      final existing = (entry.value.tmdbId > 0
+              ? localById[entry.value.tmdbId]
+              : null) ??
+          localByTitle[entry.key];
+      if (existing == null) {
+        entriesToLookup.add(entry.value);
+      } else {
+        existingToCheck.add((existing, entry.value));
+      }
+    }
+
+    // Resolve TMDB metadata & poster paths in batches of 6 (no 35-show cap)
+    final resolvedMap = <String, Drama?>{};
+    if (hasKey && entriesToLookup.isNotEmpty) {
+      var lookupDone = 0;
+      onProgress?.call('Fetching show details…', 0, entriesToLookup.length);
+      await _runInPool<ParsedCsvShowRow>(
+        entriesToLookup,
+        concurrency: 6,
+        task: (item) async {
+          Drama? resolved;
+          try {
+            if (item.tmdbId > 0) {
+              resolved = await _repo.getDramaDetails(item.tmdbId);
+            } else {
+              final results = await _repo.searchDramas(item.title);
+              if (results.isNotEmpty) resolved = results.first;
+            }
+          } catch (_) {}
+          resolvedMap[item.title.toLowerCase()] = resolved;
+          lookupDone++;
+          onProgress?.call(
+            'Fetching show details…',
+            lookupDone,
+            entriesToLookup.length,
+          );
+        },
+      );
+    }
+
     var added = 0;
     var updated = 0;
     var skipped = 0;
-    var tmdbLookups = 0;
+    final savedPosters = <String>{};
 
-    for (final entry in grouped.entries) {
-      final key = entry.key;
-      final item = entry.value;
+    for (final pair in existingToCheck) {
+      final existing = pair.$1;
+      final item = pair.$2;
       final effectiveEps = item.effectiveEpisodes;
-      final existing =
-          (item.tmdbId > 0 ? localById[item.tmdbId] : null) ?? localByTitle[key];
-
-      if (existing != null) {
-        final mergedEps =
-            effectiveEps > existing.episodesWatched ? effectiveEps : existing.episodesWatched;
-        final mergedRating =
-            existing.myRating > 0.0 ? existing.myRating : item.rating;
-        if (mergedEps != existing.episodesWatched ||
-            mergedRating != existing.myRating) {
-          _repo.saveDrama(
-            existing.copyWith(
-              episodesWatched: mergedEps,
-              myRating: mergedRating,
-              updatedAt: now,
-            ),
-          );
-          updated++;
-        } else {
-          skipped++;
-        }
-        continue;
-      }
-
-      Drama? resolved;
-      if (_secure.getTmdbCredential().isNotEmpty && tmdbLookups < 35) {
-        tmdbLookups++;
-        if (item.tmdbId > 0) {
-          resolved = await _repo.getDramaDetails(item.tmdbId);
-        } else {
-          final results = await _repo.searchDramas(item.title);
-          if (results.isNotEmpty) resolved = results.first;
+      final mergedEps =
+          effectiveEps > existing.episodesWatched ? effectiveEps : existing.episodesWatched;
+      final mergedRating =
+          existing.myRating > 0.0 ? existing.myRating : item.rating;
+      var nextPoster = normalizePosterUrl(existing.posterPath);
+      if (nextPoster.isEmpty && hasKey && existing.id > 0) {
+        final d = await _repo.getDramaDetails(existing.id);
+        if (d != null && d.posterPath.isNotEmpty) {
+          nextPoster = normalizePosterUrl(d.posterPath);
         }
       }
+      if (mergedEps != existing.episodesWatched ||
+          mergedRating != existing.myRating ||
+          nextPoster != existing.posterPath) {
+        _repo.saveDrama(
+          existing.copyWith(
+            posterPath: nextPoster,
+            episodesWatched: mergedEps,
+            myRating: mergedRating,
+            updatedAt: now,
+          ),
+        );
+        if (nextPoster.isNotEmpty) savedPosters.add(nextPoster);
+        updated++;
+      } else {
+        skipped++;
+      }
+    }
+
+    for (final item in entriesToLookup) {
+      final effectiveEps = item.effectiveEpisodes;
+      final resolved = resolvedMap[item.title.toLowerCase()];
 
       final finalId = resolved?.id ??
           (item.tmdbId > 0
@@ -821,11 +922,12 @@ class DramaController {
         finalStatus = 'Planned';
       }
 
+      final posterUrl = normalizePosterUrl(resolved?.posterPath);
       final newDrama = Drama(
         id: finalId,
         title: resolved?.title ?? item.title,
         overview: resolved?.overview ?? '',
-        posterPath: resolved?.posterPath ?? '',
+        posterPath: posterUrl,
         rating: resolved?.rating ?? 0.0,
         status: finalStatus,
         episodesWatched: effectiveEps,
@@ -841,10 +943,63 @@ class DramaController {
         completedAt: finalStatus == 'Done' ? now : 0,
       );
       _repo.saveDrama(newDrama);
+      if (posterUrl.isNotEmpty) savedPosters.add(posterUrl);
       added++;
     }
 
+    if (savedPosters.isNotEmpty) {
+      await _prewarmPosters(savedPosters.toList(), onProgress: onProgress);
+    }
+
     return ImportSummary(added: added, updated: updated, skipped: skipped);
+  }
+
+  Future<void> _prewarmPosters(
+    List<String> urls, {
+    void Function(String stage, int done, int total)? onProgress,
+  }) async {
+    var done = 0;
+    onProgress?.call('Loading show posters…', 0, urls.length);
+    await _runInPool<String>(
+      urls,
+      concurrency: 6,
+      task: (url) async {
+        for (var attempt = 0; attempt < 2; attempt++) {
+          try {
+            final cache = DefaultCacheManager();
+            final existing = await cache.getFileFromCache(url);
+            if (existing != null && await existing.file.exists()) break;
+            await cache.downloadFile(url).timeout(const Duration(seconds: 8));
+            break;
+          } catch (_) {
+            if (attempt == 0) {
+              await Future<void>.delayed(const Duration(milliseconds: 250));
+            }
+          }
+        }
+        done++;
+        onProgress?.call('Loading show posters…', done, urls.length);
+      },
+    );
+  }
+
+  Future<void> _runInPool<T>(
+    List<T> items, {
+    required int concurrency,
+    required Future<void> Function(T item) task,
+  }) async {
+    if (items.isEmpty) return;
+    var index = 0;
+    final workers = List.generate(
+      concurrency < items.length ? concurrency : items.length,
+      (_) async {
+        while (index < items.length) {
+          final current = items[index++];
+          await task(current);
+        }
+      },
+    );
+    await Future.wait(workers);
   }
 
   void dispose() {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moglog_flutter/app/providers.dart';
+import 'package:moglog_flutter/core/design_system/components.dart';
 import 'package:moglog_flutter/core/design_system/icons.dart';
 import 'package:moglog_flutter/core/design_system/theme.dart';
 import 'package:moglog_flutter/domain/model/app_settings.dart';
@@ -142,6 +143,29 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Watching (1)'), findsOneWidget);
+  });
+
+  testWidgets('Circular PosterImage renders exact square ClipOval', (tester) async {
+    await tester.pumpWidget(
+      _wrapWithApp(
+        const Scaffold(
+          body: Center(
+            child: PosterImage(
+              url: '',
+              width: 64,
+              height: 64,
+              isCircular: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final ovalFinder = find.byType(ClipOval);
+    expect(ovalFinder, findsOneWidget);
+    final size = tester.getSize(ovalFinder);
+    expect(size.width, 64.0);
+    expect(size.height, 64.0);
   });
 
   testWidgets('AppearanceSettingsScreen renders faithfully', (tester) async {
