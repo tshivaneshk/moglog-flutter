@@ -1,4 +1,4 @@
-package com.skech.moglog.flutter
+package com.skech.moglog
 
 import android.content.ContentValues
 import android.content.Context
@@ -24,7 +24,7 @@ import kotlin.math.sin
 
 class MainActivity : FlutterFragmentActivity() {
 
-    private val channelName = "com.skech.moglog.flutter/platform"
+    private val channelName = "com.skech.moglog/platform"
     private var methodChannel: MethodChannel? = null
     private var pendingOpenDramaId: Int = -1
     private var pendingNavigateTarget: String? = null
@@ -88,6 +88,32 @@ class MainActivity : FlutterFragmentActivity() {
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).apply {
             setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "migrateLegacyKotlinData" -> {
+                        Thread {
+                            val payload = try {
+                                LegacyKotlinMigration.readLegacyKotlinPayload(applicationContext)
+                            } catch (_: Exception) {
+                                null
+                            }
+                            runOnUiThread { result.success(payload) }
+                        }.start()
+                    }
+                    "markLegacyKotlinMigrationComplete" -> {
+                        LegacyKotlinMigration.markMigrationCompleted(applicationContext)
+                        result.success(true)
+                    }
+                    "syncEpisodeReminderWorker" -> {
+                        val enabled = call.argument<Boolean>("enabled") ?: false
+                        val watchingJson = call.argument<String>("watchingJson") ?: "[]"
+                        val runImmediate = call.argument<Boolean>("runImmediate") ?: false
+                        EpisodeReminderWorker.syncAndSchedule(
+                            context = applicationContext,
+                            enabled = enabled,
+                            watchingJson = watchingJson,
+                            runImmediate = runImmediate
+                        )
+                        result.success(true)
+                    }
                     "setFlagSecure" -> {
                         val enabled = call.argument<Boolean>("enabled") ?: false
                         runOnUiThread {
@@ -300,36 +326,28 @@ class MainActivity : FlutterFragmentActivity() {
      */
     private fun enableHighRefreshRateDisplay() {
         try {
-            val currentDisplay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                display
-            } else {
-                @Suppress("DEPRECATION")
-                windowManager.defaultDisplay
-            } ?: return
-            val activeMode = currentDisplay.mode
-            val sameResolutionModes = currentDisplay.supportedModes.filter {
-                it.physicalWidth == activeMode.physicalWidth &&
-                    it.physicalHeight == activeMode.physicalHeight
-            }
-            val bestMode = sameResolutionModes
-                .filter { it.refreshRate in 59.5f..120.5f }
-                .maxByOrNull { it.refreshRate }
-                ?: sameResolutionModes.minByOrNull { abs(it.refreshRate - 120f) }
-                ?: activeMode
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val activeDisplay = display ?: return
+                val currentMode = activeDisplay.mode
+                val bestMode = activeDisplay.supportedModes
+                    .filter {
+                        it.physicalWidth == currentMode.physicalWidth &&
+                            it.physicalHeight == currentMode.physicalHeight &&
+                            it.refreshRate in 60f..120.5f
+                    }
+                    .maxByOrNull { it.refreshRate }
+                    ?: activeDisplay.supportedModes
+                        .filter {
+                            it.physicalWidth == currentMode.physicalWidth &&
+                                it.physicalHeight == currentMode.physicalHeight
+                        }
+                        .minByOrNull { abs(it.refreshRate - 120f) }
 
-            val targetRefreshRate = bestMode.refreshRate.coerceIn(60f, 120f)
-            val params = window.attributes
-            var changed = false
-            if (params.preferredDisplayModeId != bestMode.modeId) {
-                params.preferredDisplayModeId = bestMode.modeId
-                changed = true
-            }
-            if (abs(params.preferredRefreshRate - targetRefreshRate) > 0.5f) {
-                params.preferredRefreshRate = targetRefreshRate
-                changed = true
-            }
-            if (changed) {
-                window.attributes = params
+                if (bestMode != null && window.attributes.preferredDisplayModeId != bestMode.modeId) {
+                    val params = window.attributes
+                    params.preferredDisplayModeId = bestMode.modeId
+                    window.attributes = params
+                }
             }
         } catch (_: Exception) {
         }

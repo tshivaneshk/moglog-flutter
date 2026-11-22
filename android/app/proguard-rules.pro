@@ -41,6 +41,11 @@
 -dontwarn com.google.android.libraries.identity.googleid.**
 -dontwarn com.google.firebase.appcheck.**
 
-# Keep Flutter MainActivity & plugins
--keep class com.skech.moglog.flutter.** { *; }
+# Keep Google Tink & DataStore (used by one-time Kotlin v3.0 -> Flutter v3.1 migrator)
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
+-keep class androidx.datastore.** { *; }
+
+# Keep Flutter MainActivity, Workers & Migration bridge
+-keep class com.skech.moglog.** { *; }
 -keep class dev.fluttercommunity.workmanager.** { *; }

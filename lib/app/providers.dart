@@ -1092,7 +1092,7 @@ class AuthController extends StateNotifier<AuthUiState> {
 
   Future<String?> signInWithGoogle() async {
     if (Firebase.apps.isEmpty) {
-      return 'Firebase is not yet configured for com.skech.moglog.flutter. Run flutterfire configure to enable Google Cloud Sync.';
+      return 'Firebase is not yet configured for com.skech.moglog. Add google-services.json to enable Google Cloud Sync.';
     }
     if (!await isOnline()) {
       return 'Offline: Connect to the internet to sign in.';

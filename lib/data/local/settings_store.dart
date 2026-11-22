@@ -46,6 +46,51 @@ class SettingsStore {
     _loadFromPrefs();
   }
 
+  /// Imports migrated Jetpack DataStore preferences from a Kotlin Moglog (<= v3.0.73) upgrade.
+  Future<void> importLegacySettings(Map<String, dynamic> legacy) async {
+    final p = _prefs;
+    if (p == null || legacy.isEmpty) return;
+
+    Future<void> setBool(String key) async {
+      final v = legacy[key];
+      if (v is bool) await p.setBool(key, v);
+    }
+
+    Future<void> setInt(String key) async {
+      final v = legacy[key];
+      if (v is num) await p.setInt(key, v.toInt());
+    }
+
+    Future<void> setString(String key) async {
+      final v = legacy[key];
+      if (v is String) await p.setString(key, v);
+    }
+
+    await setBool(_keyFirstLaunch);
+    await setString(_keySyncFrequency);
+    await setString(_keyThemeMode);
+    await setBool(_keyDynamicTint);
+    await setInt(_keyGridColumns);
+    await setString(_keyLayoutMode);
+    await setBool(_keyAppLockEnabled);
+    await setInt(_keyAppLockTimeoutSec);
+    await setBool(_keyHideInRecents);
+    await setBool(_keyEncryptedCloudBackup);
+    await setBool(_keyEpisodeReminders);
+    await setInt(_keyLastSyncedAt);
+    await setString(_keyRecentSearches);
+    await setBool(_keySqlCipherMigrated);
+    await setString(_keyCustomProfileImage);
+    await setString(_keyCustomDisplayName);
+    await setBool(_keyWatchCircleSharing);
+    await setString(_keyHiddenFromCircleIds);
+    await setString(_keyTopFourFavoriteIds);
+    await setString(_keyCustomCollections);
+    await setString(_keyCustomInviteCode);
+
+    _loadFromPrefs();
+  }
+
   void _loadFromPrefs() {
     final p = _prefs;
     if (p == null) return;

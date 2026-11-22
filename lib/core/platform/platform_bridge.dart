@@ -13,7 +13,7 @@ class DeepLinkEvent {
 /// `nflx://` deep links, MediaStore gallery save, PCM audio chime, custom vibration waveforms).
 class PlatformBridge {
   static const MethodChannel _channel =
-      MethodChannel('com.skech.moglog.flutter/platform');
+      MethodChannel('com.skech.moglog/platform');
 
   static final StreamController<DeepLinkEvent> _deepLinkController =
       StreamController<DeepLinkEvent>.broadcast();
@@ -115,6 +115,39 @@ class PlatformBridge {
     } catch (_) {
       await HapticFeedback.heavyImpact();
     }
+  }
+
+  static Future<Map<String, dynamic>?> migrateLegacyKotlinData() async {
+    if (!Platform.isAndroid) return null;
+    try {
+      final res = await _channel.invokeMethod<dynamic>('migrateLegacyKotlinData');
+      if (res is Map) {
+        return Map<String, dynamic>.from(res);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<void> markLegacyKotlinMigrationComplete() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod('markLegacyKotlinMigrationComplete');
+    } catch (_) {}
+  }
+
+  static Future<void> syncEpisodeReminderWorker({
+    required bool enabled,
+    required String watchingJson,
+    bool runImmediate = false,
+  }) async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod('syncEpisodeReminderWorker', {
+        'enabled': enabled,
+        'watchingJson': watchingJson,
+        'runImmediate': runImmediate,
+      });
+    } catch (_) {}
   }
 
   static Future<void> playPulseHaptic({

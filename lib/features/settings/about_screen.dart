@@ -62,7 +62,7 @@ class AboutScreen extends StatefulWidget {
 }
 
 class _AboutScreenState extends State<AboutScreen> {
-  String _versionName = '3.0.73';
+  String _versionName = '3.1.0';
   _UpdateCheckState _updateState = const _UpdateIdle();
   int? _totalDownloads;
 

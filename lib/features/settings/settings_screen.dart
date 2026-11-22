@@ -36,7 +36,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _headerCollapsed = false;
-  String _versionName = '3.0.73';
+  String _versionName = '3.1.0';
 
   @override
   void initState() {

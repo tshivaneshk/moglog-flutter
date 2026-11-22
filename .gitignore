@@ -47,6 +47,11 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
-# Firebase configuration
+# Firebase & local signing configuration
 **/android/app/google-services.json
 **/ios/Runner/GoogleService-Info.plist
+**/local.properties
+key.properties
+*.jks
+*.keystore
+*.p12

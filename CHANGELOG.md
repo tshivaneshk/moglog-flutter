@@ -8,6 +8,16 @@ All notable changes to the Flutter migration of Moglog (`D:\Antigravity\Moglog\m
 - Audited the entire Kotlin Moglog v3.0.73 codebase (`C:\Users\tshiv\AndroidStudioProjects\Moglog`) in strictly read-only mode.
 - Produced `docs/MIGRATION_AUDIT.md` covering all 13 screens, dialogs/sheets, navigation graph, Room v7 / SQLCipher / DataStore / Firestore data layer, `MOGLOG_ENC_V1` E2E encryption specification, Watch Circle social protocol, 13-tier Prestige Stats & Wrapped card generator, background workers, notifications, design tokens, assets, library mappings, and Android-specific platform channel requirements.
 
+## [3.1.0] - 2026-11-22
+### Changed — Official Cutover from Native Kotlin (`v3.0.73`) to Flutter (`v3.1.0`)
+- **Official App Identity & Seamless In-Place Upgrade:**
+  - Switched `applicationId` & Android `namespace` to `com.skech.moglog`, launcher label to **Moglog**, and version to **`3.1.0+14`** (`versionCode 14` > Kotlin's `13`).
+  - Configured release signing in `android/app/build.gradle.kts` to use the exact same release keystore via git-ignored `android/local.properties` / environment variables so existing `v3.0.73` users can update directly in-place without uninstalling.
+- **One-Time On-Device Kotlin Data Migrator (`LegacyKotlinMigration.kt`):**
+  - Automatically detects an existing Kotlin `v3.0.x` install on first launch, decrypts Google Tink `moglog_secure_store` (TMDB key, backup passphrase, DB key), imports all 21 Jetpack DataStore preferences (`moglog_settings.preferences_pb`), and migrates all rows from SQLCipher `/databases/drama_db` (`dramas`, `shortcuts`, `drama_details_cache`) into Flutter's encrypted database before opening the UI.
+- **Killed-Process Android `WorkManager` Reminders (`EpisodeReminderWorker.kt`):**
+  - Added native Android `WorkManager` 12-hour periodic `EpisodeReminderWorker` with rich `BigPictureStyle` notifications and deep-link routing so episode reminders fire even when Moglog is swiped closed.
+
 ## [3.0.73-flutter] - 2026-11-22
 ### Added
 - **Phase 2 (`docs/MIGRATION_PLAN.md`):** Complete feature-first Clean Architecture plan, Riverpod state architecture, package matrix, and `MOGLOG_ENC_V1` + Firestore wire compatibility specification.
