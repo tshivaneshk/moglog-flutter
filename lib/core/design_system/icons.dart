@@ -52,4 +52,5 @@ class MoglogIcons {
   static const IconData flame = LucideIcons.flame;
   static const IconData rotateCcw = LucideIcons.rotateCcw;
   static const IconData checkSquare = LucideIcons.squareCheck;
+  static const IconData info = LucideIcons.info;
 }

@@ -421,6 +421,10 @@ class DramaController {
     _transientDramas[drama.id] = drama;
   }
 
+  Drama? getImmediateDramaById(int id) {
+    return _repo.getLocalDramaById(id) ?? _transientDramas[id];
+  }
+
   Future<Drama?> resolveDramaById(int id) async {
     final local = _repo.getLocalDramaById(id);
     if (local != null) return local;

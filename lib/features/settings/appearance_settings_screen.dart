@@ -44,8 +44,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               children: [
                 IosGroupedSection(
                   header: 'Theme',
-                  footer:
-                      'Dark mode uses true OLED black (#000000) matching native Moglog.',
+                  footer: 'Dark mode uses true OLED black.',
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(14),
@@ -57,8 +56,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                     ),
                     IosSwitchRow(
                       title: 'Dynamic Poster Accent Tint',
-                      subtitle:
-                          'Adapt show detail accents from each series poster',
+                      subtitle: 'Match detail accents to poster colors',
                       icon: MoglogIcons.sparkles,
                       iconBackground: c.accent,
                       value: settings.dynamicPosterTint,

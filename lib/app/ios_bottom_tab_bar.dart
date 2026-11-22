@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../core/design_system/components.dart';
@@ -49,79 +51,92 @@ class IosBottomTabBar extends StatelessWidget {
       barHeight = 56;
     }
 
-    return IosFrostedBar(
-      showTopBorder: true,
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: barHeight,
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: size.width < 320 ? 4 : 8),
-            child: Row(
-              children: List.generate(kMoglogMainTabs.length, (i) {
-                final tab = kMoglogMainTabs[i];
-                final selected = i == currentIndex;
-                final tint = selected ? c.accent : c.secondaryLabel;
+    return RepaintBoundary(
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: IosFrostedBar(
+            showTopBorder: true,
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: barHeight,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: size.width < 320 ? 4 : 8),
+                  child: Row(
+                    children: List.generate(kMoglogMainTabs.length, (i) {
+                      final tab = kMoglogMainTabs[i];
+                      final selected = i == currentIndex;
+                      final tint = selected ? c.accent : c.secondaryLabel;
 
-                return Expanded(
-                  child: IosPressable(
-                    pressedScale: 0.94,
-                    onTap: () {
-                      if (!selected) MoglogHaptics.selectionChanged();
-                      onTap(i);
-                    },
-                    child: (isLandscape && size.width >= 380)
-                        ? Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(tab.icon, size: 18, color: tint),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  tab.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: t.footnote.copyWith(
-                                    fontSize: size.width < 460 ? 11.5 : 13,
-                                    fontWeight: selected
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                    color: tint,
+                      return Expanded(
+                        child: IosPressable(
+                          pressedScale: 0.94,
+                          onTap: () {
+                            if (!selected) MoglogHaptics.selectionChanged();
+                            onTap(i);
+                          },
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: barHeight,
+                            child: (isLandscape && size.width >= 380)
+                                ? Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(tab.icon, size: 18, color: tint),
+                                      const SizedBox(width: 6),
+                                      Flexible(
+                                        child: Text(
+                                          tab.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: t.footnote.copyWith(
+                                            fontSize: size.width < 460 ? 11.5 : 13,
+                                            fontWeight: selected
+                                                ? FontWeight.w600
+                                                : FontWeight.w500,
+                                            color: tint,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        tab.icon,
+                                        size: (isCompactHeight || isUltraNarrow)
+                                            ? 19
+                                            : 22,
+                                        color: tint,
+                                      ),
+                                      if (!isUltraNarrow && !isCompactHeight) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          tab.label,
+                                          maxLines: 1,
+                                          textAlign: TextAlign.center,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: t.caption.copyWith(
+                                            fontSize: size.width < 310 ? 9 : 10,
+                                            height: 1.1,
+                                            fontWeight: selected
+                                                ? FontWeight.w600
+                                                : FontWeight.w500,
+                                            color: tint,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                ),
-                              ),
-                            ],
-                          )
-                        : Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                tab.icon,
-                                size:
-                                    (isCompactHeight || isUltraNarrow) ? 19 : 22,
-                                color: tint,
-                              ),
-                              if (!isUltraNarrow && !isCompactHeight) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  tab.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: t.caption.copyWith(
-                                    fontSize: size.width < 310 ? 9 : 10,
-                                    height: 1.1,
-                                    fontWeight: selected
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                    color: tint,
-                                  ),
-                                ),
-                              ],
-                            ],
                           ),
+                        ),
+                      );
+                    }),
                   ),
-                );
-              }),
+                ),
+              ),
             ),
           ),
         ),

@@ -222,33 +222,32 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              'A clean, fluid library for your dramas, series, and anime—encrypted on your device by default.',
-                              style: t.subhead.copyWith(color: c.secondaryLabel),
+                              'Track dramas, series, and anime privately on your device.',
+                              style: t.footnote.copyWith(color: c.secondaryLabel),
                               textAlign: TextAlign.center,
                             ),
-                            const SizedBox(height: 28),
+                            const SizedBox(height: 24),
                             _FeatureHighlightTile(
                               icon: MoglogIcons.library,
                               color: c.accent,
                               title: 'Track Every Episode',
-                              subtitle:
-                                  'Multi-season steppers, binge time estimates, custom shelves, and completion celebrations.',
+                              subtitle: 'Steppers, binge estimates & shelves.',
                             ),
                             const SizedBox(height: 12),
                             _FeatureHighlightTile(
                               icon: MoglogIcons.shield,
                               color: c.statusPlanned,
-                              title: 'Local-First SQLCipher Encryption',
-                              subtitle:
-                                  'Your library and watch ratings stay encrypted on-device with 256-bit AES.',
+                              title: 'Private On-Device Storage',
+                              subtitle: 'Your library stays encrypted on device.',
+                              infoDescription:
+                                  'Protected at rest with SQLCipher (256-bit AES) and hardware-backed Android Keystore.',
                             ),
                             const SizedBox(height: 12),
                             _FeatureHighlightTile(
                               icon: MoglogIcons.users,
                               color: c.statusWatching,
                               title: 'Watch Circle & Taste Blend',
-                              subtitle:
-                                  'Compare compatibility with friends, race co-watched episodes, and send quick nudges.',
+                              subtitle: 'Compare taste & race shows with friends.',
                             ),
                           ],
                         ),
@@ -288,8 +287,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Paste your free TMDB v3 API Key (32 hex chars) or v4 Read Access Token to unlock search, posters, cast, and air dates.',
-                              style: t.subhead.copyWith(color: c.secondaryLabel),
+                              'Paste your free TMDB key for search & posters.',
+                              style: t.footnote.copyWith(color: c.secondaryLabel),
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 24),
@@ -391,15 +390,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               ),
                             ),
                             const SizedBox(height: 20),
-                            Text(
-                              'Zero-Knowledge Cloud Sync',
-                              style: t.title1.copyWith(color: c.label),
-                              textAlign: TextAlign.center,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    'Private Cloud Sync',
+                                    style: t.title1.copyWith(color: c.label),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const IosInfoButton(
+                                  title: 'Cloud Encryption',
+                                  description:
+                                      'Optional end-to-end encrypted backup using PBKDF2-HMAC-SHA256 (600,000 iterations) + AES-256-GCM before upload.',
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Optionally sign in with Google and set a passphrase to back up your library with AES-256-GCM end-to-end encryption.',
-                              style: t.subhead.copyWith(color: c.secondaryLabel),
+                              'Sign in with Google to back up your library.',
+                              style: t.footnote.copyWith(color: c.secondaryLabel),
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 24),
@@ -483,12 +495,14 @@ class _FeatureHighlightTile extends StatelessWidget {
   final Color color;
   final String title;
   final String subtitle;
+  final String? infoDescription;
 
   const _FeatureHighlightTile({
     required this.icon,
     required this.color,
     required this.title,
     required this.subtitle,
+    this.infoDescription,
   });
 
   @override
@@ -502,7 +516,7 @@ class _FeatureHighlightTile extends StatelessWidget {
         shape: MoglogShapes.smooth(14),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
             width: 38,
@@ -519,14 +533,35 @@ class _FeatureHighlightTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: t.headline.copyWith(color: c.label, fontSize: 15.5),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.headline.copyWith(color: c.label, fontSize: 15),
+                      ),
+                    ),
+                    if (infoDescription != null &&
+                        infoDescription!.isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      IosInfoButton(
+                        title: title,
+                        description: infoDescription!,
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: t.footnote.copyWith(color: c.secondaryLabel),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.caption.copyWith(
+                    color: c.secondaryLabel,
+                    fontSize: 11.5,
+                  ),
                 ),
               ],
             ),

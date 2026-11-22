@@ -99,7 +99,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         : (user?.displayName ?? 'Moglog Guest');
     final emailSubtitle = user != null
         ? (user.email ?? 'Signed in with Google')
-        : 'Sign in with Google for Cloud Sync & Watch Circle';
+        : 'Sign in for Cloud Sync & Watch Circle';
 
     ImageProvider? avatarImg;
     if (settings.customProfileImageBase64.trim().isNotEmpty) {
@@ -186,7 +186,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       title: 'Watch Circle & Friends',
                       subtitle: user != null
                           ? '${authState.circleFriends.length} connected friend${authState.circleFriends.length == 1 ? "" : "s"}'
-                          : 'Taste Blend, co-watching race & nudges',
+                          : 'Taste Blend, race & nudges',
                       icon: MoglogIcons.users,
                       iconBackground: c.accent,
                       showChevron: true,
@@ -196,7 +196,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     if (user != null)
                       IosSwitchRow(
                         title: 'Share My Watch Activity',
-                        subtitle: 'Visible only to your Watch Circle friends',
+                        subtitle: 'Visible to Watch Circle friends',
                         icon: MoglogIcons.sparkles,
                         iconBackground: c.statusPlanned,
                         value: settings.watchCircleSharingEnabled,
@@ -220,7 +220,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   children: [
                     IosGroupedRow(
                       title: 'Appearance',
-                      subtitle: 'Theme, poster accent tint, grid & list layout',
+                      subtitle: 'Theme, poster tint & layout',
                       icon: MoglogIcons.sunMoon,
                       iconBackground: c.statusWatching,
                       showChevron: true,
@@ -228,8 +228,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     IosGroupedRow(
                       title: 'Advanced & Storage',
-                      subtitle:
-                          'App lock, backups (.moglog / CSV), Recycle Bin, TMDB key',
+                      subtitle: 'App lock, backups, bin & TMDB key',
                       icon: MoglogIcons.shield,
                       iconBackground: c.statusPlanned,
                       showChevron: true,
@@ -244,11 +243,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 IosGroupedSection(
                   header: 'Notifications',
                   footer:
-                      'Checks your Watching shows every 12 hours for episodes airing today.',
+                      'Checks Watching shows every 12h for today\'s episodes.',
                   children: [
                     IosSwitchRow(
                       title: 'Episode Air-Date Reminders',
-                      subtitle: 'Notify when new episodes air today',
+                      subtitle: 'Notify when new episodes air',
                       icon: MoglogIcons.bell,
                       iconBackground: c.destructive,
                       value: settings.episodeRemindersEnabled,
@@ -262,8 +261,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 // About
                 IosGroupedSection(
                   header: 'About',
-                  footer:
-                      'This product uses the TMDB API but is not endorsed or certified by TMDB.',
+                  footer: 'Uses the TMDB API; not endorsed by TMDB.',
                   children: [
                     IosGroupedRow(
                       title: 'About',

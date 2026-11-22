@@ -1,6 +1,43 @@
 import 'dart:math';
 
+import '../model/drama.dart';
 import '../model/drama_extra_details.dart';
+
+const String kMoglogInstructionsUrl = 'https://moglog-instructions.vercel.app';
+
+String buildShowShareText({
+  required Drama drama,
+  required bool isInLibrary,
+  (String, String)? primaryWatch,
+}) {
+  final buf = StringBuffer()..write(drama.title);
+  if (drama.releaseYear > 0) {
+    buf.write(' (${drama.releaseYear})');
+  }
+  if (drama.myRating > 0) {
+    buf.write('\nMy Rating: ${drama.myRating.toStringAsFixed(1)}/10');
+  } else if (drama.rating > 0) {
+    buf.write('\nRating: ${drama.rating.toStringAsFixed(1)}/10');
+  }
+  if (isInLibrary) {
+    buf.write('\nStatus: ${drama.status}');
+    if (drama.episodesWatched > 0) {
+      buf.write(' · Ep ${drama.episodesWatched}');
+      if (drama.totalEpisodes > 0) {
+        buf.write('/${drama.totalEpisodes}');
+      }
+    }
+  }
+  final tmdbUrl = 'https://www.themoviedb.org/tv/${drama.id}';
+  if (primaryWatch != null) {
+    buf.write('\n\nWatch on ${primaryWatch.$1}: ${primaryWatch.$2}');
+    buf.write('\nShow Info: $tmdbUrl');
+  } else {
+    buf.write('\n\n$tmdbUrl');
+  }
+  buf.write('\n\nTrack With Moglog\n$kMoglogInstructionsUrl');
+  return buf.toString();
+}
 
 /// Exact port of `ProgressStepperCard.resolveSeasonBreakdown`.
 List<SeasonInfo> resolveSeasonBreakdown({

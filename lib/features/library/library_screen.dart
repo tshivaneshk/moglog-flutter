@@ -9,6 +9,7 @@ import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
 import '../../domain/logic/library_filter.dart';
+import '../../domain/logic/season_progress.dart';
 import '../../domain/model/app_settings.dart';
 import '../../domain/model/drama.dart';
 import 'widgets/compact_drama_row.dart';
@@ -272,11 +273,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       },
       onIncrementEpisode: () => ctrl.incrementEpisodeQuick(drama),
       onShare: () {
-        final score = drama.effectiveRating;
         Share.share(
-          '${drama.title} (${drama.status})'
-          '${score > 0 ? " — ${score.toStringAsFixed(1)}/10" : ""}\n'
-          'https://www.themoviedb.org/tv/${drama.id}',
+          buildShowShareText(
+            drama: drama,
+            isInLibrary: true,
+          ),
         );
       },
       onEnterMultiSelect: () {
@@ -339,8 +340,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             : settings.gridColumns.clamp(2, 4);
 
     final statusLabels = _statuses.map((s) {
-      if (s == selectedStatus && screenWidthDp >= 290) {
-        return '$s (${filtered.length})';
+      final count = s == 'All'
+          ? activeDramas.length
+          : activeDramas.where((d) => d.status == s).length;
+      if (count > 0 && s == selectedStatus && screenWidthDp >= 290) {
+        return '$s ($count)';
       }
       return s;
     }).toList();
@@ -349,6 +353,121 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         searchQuery.trim().isEmpty &&
         selectedShelf == null &&
         watchingDramas.isNotEmpty;
+
+    final pinnedControls = activeDramas.isEmpty
+        ? null
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isLandscape && screenWidthDp >= 480)
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 45,
+                      child: IosSearchBar(
+                        controller: _searchController,
+                        placeholder: 'Search your library',
+                        onChanged: (v) {
+                          ref
+                              .read(librarySearchQueryProvider.notifier)
+                              .state = v;
+                          setState(() {});
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 55,
+                      child: IosSegmentedControl(
+                        labels: statusLabels,
+                        selectedIndex:
+                            _statuses.indexOf(selectedStatus).clamp(0, 3),
+                        onSelected: (i) {
+                          ref
+                              .read(librarySelectedStatusProvider.notifier)
+                              .state = _statuses[i];
+                          if (_scrollController.hasClients &&
+                              _scrollController.offset > 0) {
+                            _scrollController.jumpTo(0);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                )
+              else ...[
+                IosSearchBar(
+                  controller: _searchController,
+                  placeholder: 'Search your library',
+                  onChanged: (v) {
+                    ref.read(librarySearchQueryProvider.notifier).state = v;
+                    setState(() {});
+                  },
+                ),
+                const SizedBox(height: 8),
+                IosSegmentedControl(
+                  labels: statusLabels,
+                  selectedIndex: _statuses.indexOf(selectedStatus).clamp(0, 3),
+                  onSelected: (i) {
+                    ref.read(librarySelectedStatusProvider.notifier).state =
+                        _statuses[i];
+                    if (_scrollController.hasClients &&
+                        _scrollController.offset > 0) {
+                      _scrollController.jumpTo(0);
+                    }
+                  },
+                ),
+              ],
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 34,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _ShelfChip(
+                      label: 'All Shelves',
+                      selected: selectedShelf == null,
+                      onTap: () => ref
+                          .read(librarySelectedShelfProvider.notifier)
+                          .state = null,
+                    ),
+                    const SizedBox(width: 8),
+                    _ShelfChip(
+                      label: 'Top 4 Favorites',
+                      icon: MoglogIcons.starFilled,
+                      iconColor: c.starGold,
+                      selected: selectedShelf == kTopFourShelfKey,
+                      onTap: () => ref
+                          .read(librarySelectedShelfProvider.notifier)
+                          .state = selectedShelf == kTopFourShelfKey
+                              ? null
+                              : kTopFourShelfKey,
+                    ),
+                    for (final shelf in settings.customCollections) ...[
+                      const SizedBox(width: 8),
+                      _ShelfChip(
+                        label: shelf,
+                        selected: selectedShelf == shelf,
+                        onTap: () => ref
+                            .read(librarySelectedShelfProvider.notifier)
+                            .state = selectedShelf == shelf ? null : shelf,
+                        onLongPress: () => _showShelfOptionsSheet(shelf),
+                      ),
+                    ],
+                    const SizedBox(width: 8),
+                    _ShelfChip(
+                      label: 'New Shelf',
+                      icon: MoglogIcons.plus,
+                      selected: false,
+                      isAction: true,
+                      onTap: _showNewShelfDialog,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
 
     return Scaffold(
       backgroundColor: c.background,
@@ -391,6 +510,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             IosLargeTitleHeader(
               title: 'Library',
               collapsed: _headerCollapsed,
+              bottomContent: pinnedControls,
               trailingActions: [
                 IosCircleIconButton(
                   icon: settings.layoutMode == LibraryLayoutMode.grid
@@ -447,143 +567,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 : CustomScrollView(
                     controller: _scrollController,
                     slivers: [
-                      // Search bar + Status segmented control (side-by-side in landscape >= 480dp matching Kotlin)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
-                          child: (isLandscape && screenWidthDp >= 480)
-                              ? Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 45,
-                                      child: IosSearchBar(
-                                        controller: _searchController,
-                                        placeholder: 'Search your library',
-                                        onChanged: (v) {
-                                          ref
-                                              .read(
-                                                librarySearchQueryProvider
-                                                    .notifier,
-                                              )
-                                              .state = v;
-                                          setState(() {});
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      flex: 55,
-                                      child: IosSegmentedControl(
-                                        labels: statusLabels,
-                                        selectedIndex: _statuses
-                                            .indexOf(selectedStatus)
-                                            .clamp(0, 3),
-                                        onSelected: (i) {
-                                          ref
-                                              .read(
-                                                librarySelectedStatusProvider
-                                                    .notifier,
-                                              )
-                                              .state = _statuses[i];
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Column(
-                                  children: [
-                                    IosSearchBar(
-                                      controller: _searchController,
-                                      placeholder: 'Search your library',
-                                      onChanged: (v) {
-                                        ref
-                                            .read(
-                                              librarySearchQueryProvider
-                                                  .notifier,
-                                            )
-                                            .state = v;
-                                        setState(() {});
-                                      },
-                                    ),
-                                    const SizedBox(height: 10),
-                                    IosSegmentedControl(
-                                      labels: statusLabels,
-                                      selectedIndex: _statuses
-                                          .indexOf(selectedStatus)
-                                          .clamp(0, 3),
-                                      onSelected: (i) {
-                                        ref
-                                            .read(
-                                              librarySelectedStatusProvider
-                                                  .notifier,
-                                            )
-                                            .state = _statuses[i];
-                                      },
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
-
-                      // Collection Shelves + Top 4 Horizontal Chip Row
-                      SliverToBoxAdapter(
-                        child: SizedBox(
-                          height: 44,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 5,
-                            ),
-                            children: [
-                              _ShelfChip(
-                                label: 'All Shelves',
-                                selected: selectedShelf == null,
-                                onTap: () => ref
-                                    .read(librarySelectedShelfProvider.notifier)
-                                    .state = null,
-                              ),
-                              const SizedBox(width: 8),
-                              _ShelfChip(
-                                label: 'Top 4 Favorites',
-                                icon: MoglogIcons.starFilled,
-                                iconColor: c.starGold,
-                                selected: selectedShelf == kTopFourShelfKey,
-                                onTap: () => ref
-                                    .read(librarySelectedShelfProvider.notifier)
-                                    .state = selectedShelf == kTopFourShelfKey
-                                        ? null
-                                        : kTopFourShelfKey,
-                              ),
-                              for (final shelf in settings.customCollections) ...[
-                                const SizedBox(width: 8),
-                                _ShelfChip(
-                                  label: shelf,
-                                  selected: selectedShelf == shelf,
-                                  onTap: () => ref
-                                      .read(librarySelectedShelfProvider.notifier)
-                                      .state = selectedShelf == shelf ? null : shelf,
-                                  onLongPress: () => _showShelfOptionsSheet(shelf),
-                                ),
-                              ],
-                              const SizedBox(width: 8),
-                              _ShelfChip(
-                                label: 'New Shelf',
-                                icon: MoglogIcons.plus,
-                                selected: false,
-                                isAction: true,
-                                onTap: _showNewShelfDialog,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
                       // Continue Watching Rail
                       if (showContinueWatching)
                         SliverToBoxAdapter(
                           child: Padding(
-                            padding: const EdgeInsets.only(top: 6, bottom: 10),
+                            padding: const EdgeInsets.only(top: 10, bottom: 10),
                             child: ContinueWatchingSection(
                               watchingDramas: watchingDramas,
                               onDramaTap: (d) => widget.onDramaTap(d.id),

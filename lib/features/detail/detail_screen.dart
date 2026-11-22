@@ -1,13 +1,10 @@
 import 'dart:async';
-import 'dart:isolate';
 import 'dart:math';
-import 'dart:typed_data';
+import 'dart:ui' as ui;
 
-import 'package:dio/dio.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image/image.dart' as img;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -57,6 +54,21 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   @override
   void initState() {
     super.initState();
+    final ctrl = ref.read(dramaControllerProvider);
+    final local = ref.read(dramaRepositoryProvider).getLocalDramaById(widget.dramaId);
+    final immediate = local ?? ctrl.getImmediateDramaById(widget.dramaId);
+    if (immediate != null) {
+      _drama = immediate;
+      _isSaved = local != null && !local.isDeleted;
+      _loading = false;
+      final cachedTint = _posterTintCache[immediate.posterPath];
+      if (cachedTint != null &&
+          ref.read(currentSettingsProvider).dynamicPosterTint) {
+        _dynamicAccent = cachedTint;
+      } else if (ref.read(currentSettingsProvider).dynamicPosterTint) {
+        unawaited(_extractPosterAccent(immediate.posterPath));
+      }
+    }
     _loadData();
   }
 
@@ -66,6 +78,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final resolved = await ctrl.resolveDramaById(widget.dramaId);
     if (!mounted) return;
     if (resolved != null) {
+      final posterChanged = _drama?.posterPath != resolved.posterPath;
       _drama = resolved;
       _isSaved = local != null && !local.isDeleted;
       final cachedTint = _posterTintCache[resolved.posterPath];
@@ -74,11 +87,12 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
         _dynamicAccent = cachedTint;
       }
       setState(() => _loading = false);
-      if (cachedTint == null &&
+      if ((posterChanged || _dynamicAccent == null) &&
+          cachedTint == null &&
           ref.read(currentSettingsProvider).dynamicPosterTint) {
         unawaited(_extractPosterAccent(resolved.posterPath));
       }
-    } else {
+    } else if (_drama == null) {
       setState(() => _loading = false);
     }
 
@@ -111,70 +125,95 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     });
   }
 
+  /// Fast native image-codec tint extraction shared with `PosterImage`'s cache.
   Future<void> _extractPosterAccent(String posterUrl) async {
-    if (posterUrl.trim().isEmpty) return;
-    final cached = _posterTintCache[posterUrl];
+    final trimmed = posterUrl.trim();
+    if (trimmed.isEmpty) return;
+    final cached = _posterTintCache[trimmed];
     if (cached != null) {
       if (mounted) setState(() => _dynamicAccent = cached);
       return;
     }
-    try {
-      Uint8List? bytes;
-      // 1. Check already-cached poster file on disk (zero network wait)
-      final cachedFile = await DefaultCacheManager().getFileFromCache(posterUrl);
-      if (cachedFile != null && await cachedFile.file.exists()) {
-        bytes = await cachedFile.file.readAsBytes();
-      } else {
-        // 2. Fallback to tiny w92 thumbnail for instant network extraction
-        final thumbUrl = posterUrl
-            .replaceFirst('/w500/', '/w92/')
-            .replaceFirst('/w342/', '/w92/');
-        final res = await Dio().get<List<int>>(
-          thumbUrl,
-          options: Options(responseType: ResponseType.bytes),
-        );
-        final raw = res.data;
-        if (raw != null && raw.isNotEmpty) {
-          bytes = Uint8List.fromList(raw);
+
+    final completer = Completer<ui.Image?>();
+    final provider = ResizeImage(
+      CachedNetworkImageProvider(trimmed),
+      width: 24,
+    );
+    final stream = provider.resolve(ImageConfiguration.empty);
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (info, _) {
+        stream.removeListener(listener);
+        if (!completer.isCompleted) {
+          completer.complete(info.image.clone());
         }
-      }
-      if (bytes == null || bytes.isEmpty) return;
-      final inputBytes = bytes;
-      final vibrantValue = await Isolate.run<int?>(() {
-        final decoded = img.decodeImage(inputBytes);
-        if (decoded == null) return null;
-        final resized = img.copyResize(decoded, width: 20, height: 30);
-        HSLColor? best;
-        double bestScore = -1;
-        for (var y = 0; y < resized.height; y++) {
-          for (var x = 0; x < resized.width; x++) {
-            final p = resized.getPixel(x, y);
-            final color = Color.fromARGB(255, p.r.toInt(), p.g.toInt(), p.b.toInt());
-            final hsl = HSLColor.fromColor(color);
-            if (hsl.saturation < 0.28 ||
-                hsl.lightness < 0.22 ||
-                hsl.lightness > 0.78) {
-              continue;
-            }
-            final score = hsl.saturation * (1.0 - (hsl.lightness - 0.5).abs());
-            if (score > bestScore) {
-              bestScore = score;
-              best = hsl;
-            }
+      },
+      onError: (_, __) {
+        stream.removeListener(listener);
+        if (!completer.isCompleted) completer.complete(null);
+      },
+    );
+    stream.addListener(listener);
+
+    try {
+      final image = await completer.future.timeout(
+        const Duration(seconds: 4),
+        onTimeout: () {
+          stream.removeListener(listener);
+          return null;
+        },
+      );
+      if (image == null) return;
+
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      image.dispose();
+      if (byteData == null) return;
+
+      final pixels = byteData.buffer.asUint8List();
+      HSLColor? bestVibrant;
+      double bestVibrantScore = -1;
+      HSLColor? bestFallback;
+      double bestFallbackScore = -1;
+
+      for (var i = 0; i + 3 < pixels.length; i += 4) {
+        final a = pixels[i + 3];
+        if (a < 128) continue;
+        final color = Color.fromARGB(255, pixels[i], pixels[i + 1], pixels[i + 2]);
+        final hsl = HSLColor.fromColor(color);
+        if (hsl.lightness >= 0.16 &&
+            hsl.lightness <= 0.84 &&
+            hsl.saturation >= 0.14) {
+          final fbScore = hsl.saturation * (1.0 - (hsl.lightness - 0.5).abs() * 0.7);
+          if (fbScore > bestFallbackScore) {
+            bestFallbackScore = fbScore;
+            bestFallback = hsl;
           }
         }
-        if (best == null) return null;
-        return best.withLightness(best.lightness.clamp(0.45, 0.65)).toColor().toARGB32();
-      });
-      if (vibrantValue != null) {
-        final vibrant = Color(vibrantValue);
-        if (_posterTintCache.length > 64) {
-          _posterTintCache.remove(_posterTintCache.keys.first);
+        if (hsl.saturation >= 0.28 &&
+            hsl.lightness >= 0.20 &&
+            hsl.lightness <= 0.78) {
+          final vScore = hsl.saturation * (1.0 - (hsl.lightness - 0.5).abs());
+          if (vScore > bestVibrantScore) {
+            bestVibrantScore = vScore;
+            bestVibrant = hsl;
+          }
         }
-        _posterTintCache[posterUrl] = vibrant;
-        if (mounted) {
-          setState(() => _dynamicAccent = vibrant);
-        }
+      }
+
+      final chosen = bestVibrant ?? bestFallback;
+      if (chosen == null) return;
+      final vibrant = chosen
+          .withSaturation(chosen.saturation.clamp(0.42, 0.85))
+          .withLightness(chosen.lightness.clamp(0.42, 0.58))
+          .toColor();
+
+      if (_posterTintCache.length > 96) {
+        _posterTintCache.remove(_posterTintCache.keys.first);
+      }
+      _posterTintCache[trimmed] = vibrant;
+      if (mounted) {
+        setState(() => _dynamicAccent = vibrant);
       }
     } catch (_) {}
   }
@@ -332,13 +371,13 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               dramaTitle: d.title,
               watchProviders: _extra?.watchProviders ?? const [],
             );
-            final score = d.effectiveRating;
-            final text = StringBuffer()
-              ..write(d.title)
-              ..write(score > 0 ? ' ★ ${score.toStringAsFixed(1)}/10' : '')
-              ..write(watch != null ? '\nWatch on ${watch.$1}: ${watch.$2}' : '')
-              ..write('\nhttps://www.themoviedb.org/tv/${d.id}');
-            Share.share(text.toString());
+            Share.share(
+              buildShowShareText(
+                drama: d,
+                isInLibrary: _isSaved,
+                primaryWatch: watch,
+              ),
+            );
           },
         ),
         ActionSheetItem(
@@ -962,15 +1001,29 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                             ),
                           ),
                         ),
-                        DecoratedBox(
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOutCubic,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.black.withValues(alpha: 0.45),
-                                Colors.transparent,
-                                c.background.withValues(alpha: 0.82),
+                                (settings.dynamicPosterTint && _dynamicAccent != null)
+                                    ? Color.alphaBlend(
+                                        accent.withValues(alpha: 0.24),
+                                        Colors.black.withValues(alpha: 0.42),
+                                      )
+                                    : Colors.black.withValues(alpha: 0.45),
+                                (settings.dynamicPosterTint && _dynamicAccent != null)
+                                    ? accent.withValues(alpha: 0.08)
+                                    : Colors.transparent,
+                                (settings.dynamicPosterTint && _dynamicAccent != null)
+                                    ? Color.alphaBlend(
+                                        accent.withValues(alpha: 0.14),
+                                        c.background.withValues(alpha: 0.86),
+                                      )
+                                    : c.background.withValues(alpha: 0.82),
                                 c.background,
                               ],
                               stops: const [0.0, 0.35, 0.78, 1.0],

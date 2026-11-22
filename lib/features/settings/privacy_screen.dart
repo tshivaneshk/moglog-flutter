@@ -42,47 +42,52 @@ class PrivacyScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Moglog stores your library, notes, and watch progress on your device inside an encrypted SQLCipher database backed by Android Keystore.',
-                        style: t.subhead.copyWith(color: c.secondaryLabel),
+                        'Your library and watch progress stay encrypted on your device.',
+                        style: t.footnote.copyWith(color: c.secondaryLabel),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 18),
                 const IosGroupedSection(
-                  header: 'On-Device Encryption',
+                  header: 'On-Device Protection',
                   children: [
-                    _PrivacyBulletRow(
-                      title: 'Encrypted Local Database',
-                      body:
-                          'Your watchlist, personal ratings, and notes are encrypted at rest with SQLCipher (256-bit AES) using a random passphrase sealed in Android Keystore.',
+                    IosGroupedRow(
+                      title: 'Private Local Database',
+                      subtitle: 'Watchlist & ratings stay encrypted on device',
+                      infoDescription:
+                          'Encrypted at rest with SQLCipher (256-bit AES) using a random 256-bit passphrase sealed inside hardware-backed Android Keystore.',
                     ),
-                    _PrivacyBulletRow(
+                    IosGroupedRow(
                       title: 'Protected API Credentials',
-                      body:
-                          'Your personal TMDB API key or Read Access Token is encrypted in SecureStore and is never synced to Firestore or third-party servers.',
+                      subtitle: 'TMDB key stays local, never uploaded',
+                      infoDescription:
+                          'Your TMDB v3 API Key or v4 Read Access Token is encrypted inside hardware-backed SecureStore and is never synced to the cloud.',
                     ),
-                    _PrivacyBulletRow(
+                    IosGroupedRow(
                       title: 'Excluded from Auto-Backup',
-                      body:
-                          'Android cloud backup and device-to-device extraction rules explicitly exclude encrypted databases and keystore keysets so keys never leave your hardware.',
+                      subtitle: 'Keys & databases stay off device transfers',
+                      infoDescription:
+                          'Android cloud auto-backup and device-to-device extraction rules explicitly exclude encrypted databases and keystore keysets.',
                       showDivider: false,
                     ),
                   ],
                 ),
                 const SizedBox(height: 18),
                 const IosGroupedSection(
-                  header: 'Optional Cloud Sync & E2E Backup',
+                  header: 'Optional Cloud Sync',
                   children: [
-                    _PrivacyBulletRow(
-                      title: 'Zero-Knowledge Passphrase Option',
-                      body:
-                          'When End-to-End Encrypted Cloud Backup is enabled, your library is encrypted client-side using PBKDF2-HMAC-SHA256 (600,000 iterations) + AES-256-GCM before upload.',
+                    IosGroupedRow(
+                      title: 'Passphrase Cloud Lock',
+                      subtitle: 'End-to-end encrypted before upload',
+                      infoDescription:
+                          'When enabled, your library is encrypted client-side with PBKDF2-HMAC-SHA256 (600,000 iterations) and AES-256-GCM before upload.',
                     ),
-                    _PrivacyBulletRow(
+                    IosGroupedRow(
                       title: 'Full Account Control',
-                      body:
-                          'You can export your library to an encrypted .moglog archive or permanently delete your cloud backup and Firebase Auth account at any time from Settings.',
+                      subtitle: 'Export backups or delete cloud data anytime',
+                      infoDescription:
+                          'You can export a portable .moglog or CSV backup or permanently delete your cloud backups and account anytime from Settings.',
                       showDivider: false,
                     ),
                   ],
@@ -90,18 +95,19 @@ class PrivacyScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 const IosGroupedSection(
                   header: 'Third-Party Services',
-                  footer:
-                      'This product uses the TMDB API but is not endorsed or certified by TMDB.',
+                  footer: 'Uses the TMDB API; not endorsed by TMDB.',
                   children: [
                     IosGroupedRow(
                       title: 'The Movie Database (TMDB)',
-                      subtitle:
-                          'Used directly from your device to fetch show posters, episode counts, and regional streaming availability.',
+                      subtitle: 'Fetches posters, episodes & watch links',
+                      infoDescription:
+                          'Queried directly from your device using your own personal TMDB API credential to retrieve posters, episode metadata, and regional streaming providers.',
                     ),
                     IosGroupedRow(
                       title: 'Google Firebase (Optional)',
-                      subtitle:
-                          'Used only if you sign in with Google for cross-device cloud backup.',
+                      subtitle: 'Used only when signed in for sync & circle',
+                      infoDescription:
+                          'Used exclusively for optional Google Sign-In, cross-device cloud backup storage, and Watch Circle friend connections.',
                       showDivider: false,
                     ),
                   ],
@@ -111,53 +117,6 @@ class PrivacyScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PrivacyBulletRow extends StatelessWidget {
-  final String title;
-  final String body;
-  final bool showDivider;
-
-  const _PrivacyBulletRow({
-    required this.title,
-    required this.body,
-    this.showDivider = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = context.typo;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: t.body.copyWith(
-                  color: c.label,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(body, style: t.footnote.copyWith(color: c.secondaryLabel)),
-            ],
-          ),
-        ),
-        if (showDivider)
-          Divider(
-            height: c.hairlineWidth,
-            thickness: c.hairlineWidth,
-            color: c.separator,
-            indent: 16,
-          ),
-      ],
     );
   }
 }

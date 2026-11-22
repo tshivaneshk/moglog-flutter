@@ -262,6 +262,19 @@ void main() {
       );
     });
 
+    test('buildShowShareText includes Track With Moglog and instruction webpage link', () {
+      final shareText = buildShowShareText(
+        drama: sampleDramas[1],
+        isInLibrary: true,
+        primaryWatch: ('Disney+', 'https://www.disneyplus.com/search?q=Moving'),
+      );
+      expect(shareText, contains('Moving (2023)'));
+      expect(shareText, contains('My Rating: 9.0/10'));
+      expect(shareText, contains('Status: Watching · Ep 12/20'));
+      expect(shareText, contains('Track With Moglog'));
+      expect(shareText, contains('https://moglog-instructions.vercel.app'));
+    });
+
     test('TMDB credential validator blocks compromised legacy key and validates v3/v4', () {
       expect(
         SecureStore.isValidTmdbCredentialFormat('b30d871ab7f51c18054f0e6d0921da16'),

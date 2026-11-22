@@ -119,12 +119,11 @@ class _SortFilterSheetContentState extends State<_SortFilterSheetContent> {
           const SizedBox(height: 18),
           IosGroupedSection(
             header: 'Season Progress',
-            footer:
-                'Shows where at least one season is completed while later seasons are still in progress.',
+            footer: 'Shows with completed seasons and more left.',
             children: [
               IosSwitchRow(
                 title: 'Partially Done Series',
-                subtitle: 'Completed 1+ seasons, more remaining',
+                subtitle: '1+ seasons finished, more left',
                 value: _onlyPartiallyDone,
                 showDivider: false,
                 onChanged: (v) => setState(() => _onlyPartiallyDone = v),

@@ -62,11 +62,13 @@ class _AdvancedSettingsScreenState
     showIosActionSheet(
       context: context,
       title: 'Export Library Backup',
-      message: 'Choose an encrypted .moglog archive or a portable CSV spreadsheet.',
+      message: 'Choose a backup format.',
       actions: [
         ActionSheetItem(
-          label: 'Encrypted Archive (.moglog · AES-256-GCM)',
+          label: 'Encrypted Backup (.moglog)',
           icon: MoglogIcons.lock,
+          infoDescription:
+              'Password-protected portable backup encrypted with PBKDF2-HMAC-SHA256 (600,000 iterations) and AES-256-GCM.',
           onTap: _promptExportPassphrase,
         ),
         ActionSheetItem(
@@ -96,14 +98,28 @@ class _AdvancedSettingsScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Encrypt .moglog Export',
-                  style: t.title3.copyWith(color: c.label),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'Encrypt .moglog Export',
+                        style: t.title3.copyWith(color: c.label),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const IosInfoButton(
+                      title: 'Backup Encryption',
+                      description:
+                          'Encrypted with PBKDF2-HMAC-SHA256 (600,000 iterations) and AES-256-GCM for cross-device compatibility.',
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Your backup will be encrypted with PBKDF2-HMAC-SHA256 (600,000 iterations) + AES-256-GCM, 100% compatible with Kotlin Moglog.',
-                  style: t.footnote.copyWith(color: c.secondaryLabel),
+                  'Enter a passphrase to protect this backup.',
+                  style: t.caption.copyWith(color: c.secondaryLabel, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 14),
                 Container(
@@ -203,7 +219,7 @@ class _AdvancedSettingsScreenState
     showIosActionSheet(
       context: context,
       title: 'Import Library Backup',
-      message: 'Supports Moglog encrypted (.moglog) and CSV exports (Moglog, TV Time, Trakt).',
+      message: 'Restore from .moglog, CSV, TV Time, or Trakt.',
       actions: [
         ActionSheetItem(
           label: 'Select .moglog or .csv File',
@@ -348,14 +364,28 @@ class _AdvancedSettingsScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'TMDB API Key / Read Token',
-                  style: t.title3.copyWith(color: c.label),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'TMDB API Key / Read Token',
+                        style: t.title3.copyWith(color: c.label),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const IosInfoButton(
+                      title: 'Credential Storage',
+                      description:
+                          'Stored locally using Android hardware-backed Keystore encryption and never synced to the cloud.',
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Stored locally in hardware-backed SecureStore. Never synced to Firestore.',
-                  style: t.footnote.copyWith(color: c.secondaryLabel),
+                  'Stored privately on this device only.',
+                  style: t.caption.copyWith(color: c.secondaryLabel, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 14),
                 Container(
@@ -472,7 +502,7 @@ class _AdvancedSettingsScreenState
                   children: [
                     IosSwitchRow(
                       title: 'Biometric / Device PIN Lock',
-                      subtitle: 'Require fingerprint, face, or PIN to open Moglog',
+                      subtitle: 'Require fingerprint, face, or PIN',
                       icon: MoglogIcons.lock,
                       iconBackground: c.accent,
                       value: settings.appLockEnabled,
@@ -492,7 +522,9 @@ class _AdvancedSettingsScreenState
                     ),
                     IosSwitchRow(
                       title: 'Hide in App Switcher',
-                      subtitle: 'Blocks screenshots & recent-apps previews (FLAG_SECURE)',
+                      subtitle: 'Blocks screenshots & recent previews',
+                      infoDescription:
+                          'Enables Android FLAG_SECURE so screen capture tools and recent-apps previews cannot view Moglog.',
                       icon: MoglogIcons.shield,
                       iconBackground: c.statusPlanned,
                       value: settings.hideInRecents,
@@ -512,7 +544,7 @@ class _AdvancedSettingsScreenState
                   children: [
                     IosGroupedRow(
                       title: 'Export Library Backup',
-                      subtitle: 'Encrypted .moglog archive or CSV spreadsheet',
+                      subtitle: 'Encrypted .moglog or CSV file',
                       icon: MoglogIcons.download,
                       iconBackground: c.accent,
                       showChevron: true,
@@ -520,7 +552,7 @@ class _AdvancedSettingsScreenState
                     ),
                     IosGroupedRow(
                       title: 'Import Library Backup',
-                      subtitle: 'Supports .moglog, Moglog CSV, TV Time & Trakt',
+                      subtitle: '.moglog, CSV, TV Time & Trakt',
                       icon: MoglogIcons.upload,
                       iconBackground: c.statusPlanned,
                       showChevron: true,
@@ -530,7 +562,7 @@ class _AdvancedSettingsScreenState
                       title: 'Recycle Bin',
                       subtitle: deletedCount > 0
                           ? '$deletedCount show${deletedCount == 1 ? "" : "s"} · Auto-purged after 30 days'
-                          : 'Empty · Deleted shows kept for 30 days',
+                          : 'Empty · Deleted shows kept 30 days',
                       icon: MoglogIcons.trash,
                       iconBackground: c.destructive,
                       showChevron: true,
@@ -538,7 +570,7 @@ class _AdvancedSettingsScreenState
                     ),
                     IosGroupedRow(
                       title: 'Clear Metadata Cache',
-                      subtitle: 'Clears 7-day TMDB detail cache & Discover rails',
+                      subtitle: 'Clear 7-day show & Discover cache',
                       icon: MoglogIcons.refresh,
                       iconBackground: c.statusWatching,
                       showDivider: false,

@@ -48,6 +48,7 @@ class IosLargeTitleHeader extends StatelessWidget {
   final bool collapsed;
   final Widget? leadingActions;
   final List<Widget>? trailingActions;
+  final Widget? bottomContent;
 
   const IosLargeTitleHeader({
     super.key,
@@ -55,6 +56,7 @@ class IosLargeTitleHeader extends StatelessWidget {
     this.collapsed = false,
     this.leadingActions,
     this.trailingActions,
+    this.bottomContent,
   });
 
   @override
@@ -69,19 +71,27 @@ class IosLargeTitleHeader extends StatelessWidget {
     final hPad = size.width < 320 ? 12.0 : 16.0;
     final inlineNoLeading =
         (isLandscape || isCompactWindow) && leadingActions == null;
+    final trailingCount = trailingActions?.length ?? 0;
+    final safeCenterPad = inlineNoLeading
+        ? 0.0
+        : trailingCount >= 3
+            ? 96.0
+            : trailingCount == 2
+                ? 76.0
+                : (leadingActions != null || trailingCount == 1)
+                    ? 46.0
+                    : 8.0;
 
     return IosFrostedBar(
-      showBottomBorder: effectiveCollapsed,
+      showBottomBorder: effectiveCollapsed || bottomContent != null,
       child: SafeArea(
         bottom: false,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
+        child: Padding(
           padding: EdgeInsets.fromLTRB(
             hPad,
-            effectiveCollapsed ? 6 : 10,
+            effectiveCollapsed ? 4 : 6,
             hPad,
-            effectiveCollapsed ? 8 : 8,
+            bottomContent != null ? (isLandscape || isCompactWindow ? 6 : 8) : 6,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -89,58 +99,78 @@ class IosLargeTitleHeader extends StatelessWidget {
             children: [
               SizedBox(
                 height: (isLandscape || isCompactWindow) ? 40 : 44,
-                child: Row(
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    if (leadingActions != null) ...[
-                      leadingActions!,
-                      const SizedBox(width: 8),
-                    ],
+                    if (leadingActions != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: leadingActions!,
+                      ),
                     if (inlineNoLeading)
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: (size.width < 300 ? t.headline : t.title3)
-                              .copyWith(color: c.label),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            right: trailingCount > 0
+                                ? (trailingCount * 42.0)
+                                : 0.0,
+                          ),
+                          child: Text(
+                            title,
+                            style: (size.width < 300 ? t.headline : t.title3)
+                                .copyWith(color: c.label),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       )
                     else
-                      Expanded(
-                        child: AnimatedOpacity(
-                          opacity: effectiveCollapsed ? 1.0 : 0.0,
-                          duration: const Duration(milliseconds: 150),
-                          child: effectiveCollapsed
-                              ? Text(
-                                  title,
-                                  style: t.headline.copyWith(color: c.label),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                )
-                              : const SizedBox.shrink(),
+                      AnimatedOpacity(
+                        opacity: effectiveCollapsed ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 140),
+                        child: IgnorePointer(
+                          ignoring: !effectiveCollapsed,
+                          child: Padding(
+                            padding:
+                                EdgeInsets.symmetric(horizontal: safeCenterPad),
+                            child: Text(
+                              title,
+                              textAlign: TextAlign.center,
+                              style: t.headline.copyWith(color: c.label),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ),
                       ),
                     if (trailingActions != null && trailingActions!.isNotEmpty)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (var i = 0; i < trailingActions!.length; i++) ...[
-                            if (i > 0) SizedBox(width: size.width < 320 ? 6 : 8),
-                            trailingActions![i],
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (var i = 0;
+                                i < trailingActions!.length;
+                                i++) ...[
+                              if (i > 0)
+                                SizedBox(width: size.width < 320 ? 6 : 8),
+                              trailingActions![i],
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                   ],
                 ),
               ),
               AnimatedSize(
-                duration: const Duration(milliseconds: 160),
+                duration: const Duration(milliseconds: 150),
                 curve: Curves.easeOutCubic,
                 alignment: Alignment.topLeft,
                 child: effectiveCollapsed
                     ? const SizedBox.shrink()
                     : Padding(
-                        padding: const EdgeInsets.only(top: 2, bottom: 4),
+                        padding: const EdgeInsets.only(top: 2, bottom: 6),
                         child: Text(
                           title,
                           style: t.largeTitle.copyWith(color: c.label),
@@ -149,6 +179,7 @@ class IosLargeTitleHeader extends StatelessWidget {
                         ),
                       ),
               ),
+              if (bottomContent != null) bottomContent!,
             ],
           ),
         ),
@@ -226,6 +257,86 @@ class IosCircleIconButton extends StatelessWidget {
   }
 }
 
+void showIosInfoSheet({
+  required BuildContext context,
+  required String title,
+  required String description,
+}) {
+  final c = context.colors;
+  final t = context.typo;
+  showIosBottomSheet<void>(
+    context: context,
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 22),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(MoglogIcons.info, size: 19, color: c.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: t.headline.copyWith(color: c.label),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            description,
+            style: t.subhead.copyWith(color: c.secondaryLabel, height: 1.45),
+          ),
+          const SizedBox(height: 18),
+          IosSecondaryButton(
+            text: 'Got it',
+            onTap: () => Navigator.of(ctx).pop(),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class IosInfoButton extends StatelessWidget {
+  final String title;
+  final String description;
+  final double iconSize;
+
+  const IosInfoButton({
+    super.key,
+    required this.title,
+    required this.description,
+    this.iconSize = 15,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        MoglogHaptics.selectionChanged();
+        showIosInfoSheet(
+          context: context,
+          title: title,
+          description: description,
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(
+          MoglogIcons.info,
+          size: iconSize,
+          color: c.tertiaryLabel,
+        ),
+      ),
+    );
+  }
+}
+
 class IosGroupedSection extends StatelessWidget {
   final String? header;
   final String? footer;
@@ -271,7 +382,10 @@ class IosGroupedSection extends StatelessWidget {
             padding: const EdgeInsets.only(left: 16, top: 7, right: 16),
             child: Text(
               footer!,
-              style: t.footnote.copyWith(color: c.secondaryLabel),
+              style: t.caption.copyWith(
+                color: c.secondaryLabel,
+                fontSize: 11.5,
+              ),
             ),
           ),
       ],
@@ -289,6 +403,7 @@ class IosGroupedRow extends StatelessWidget {
   final bool showChevron;
   final bool showDivider;
   final VoidCallback? onTap;
+  final String? infoDescription;
 
   const IosGroupedRow({
     super.key,
@@ -301,6 +416,7 @@ class IosGroupedRow extends StatelessWidget {
     this.showChevron = false,
     this.showDivider = true,
     this.onTap,
+    this.infoDescription,
   });
 
   @override
@@ -309,7 +425,7 @@ class IosGroupedRow extends StatelessWidget {
     final t = context.typo;
 
     final rowContent = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
       child: Row(
         children: [
           if (icon != null) ...[
@@ -329,19 +445,38 @@ class IosGroupedRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: t.body.copyWith(
-                    color: titleColor ?? c.label,
-                    fontSize: 16,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.body.copyWith(
+                          color: titleColor ?? c.label,
+                          fontSize: 15.5,
+                        ),
+                      ),
+                    ),
+                    if (infoDescription != null &&
+                        infoDescription!.isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      IosInfoButton(
+                        title: title,
+                        description: infoDescription!,
+                      ),
+                    ],
+                  ],
                 ),
                 if (subtitle != null && subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1.5),
                   Text(
                     subtitle!,
-                    style: t.footnote.copyWith(color: c.secondaryLabel),
-                    maxLines: 2,
+                    style: t.caption.copyWith(
+                      color: c.secondaryLabel,
+                      fontSize: 11.5,
+                    ),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
@@ -394,6 +529,7 @@ class IosSwitchRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
   final bool showDivider;
+  final String? infoDescription;
 
   const IosSwitchRow({
     super.key,
@@ -404,6 +540,7 @@ class IosSwitchRow extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.showDivider = true,
+    this.infoDescription,
   });
 
   @override
@@ -415,6 +552,7 @@ class IosSwitchRow extends StatelessWidget {
       icon: icon,
       iconBackground: iconBackground,
       showDivider: showDivider,
+      infoDescription: infoDescription,
       onTap: () => onChanged(!value),
       trailing: CupertinoSwitch(
         value: value,
@@ -446,63 +584,88 @@ class IosSegmentedControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
-    return Container(
-      height: 36,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: c.tertiaryBackground,
-        borderRadius: MoglogShapes.control,
-      ),
-      child: Row(
-        children: List.generate(labels.length, (i) {
-          final isSelected = i == selectedIndex;
-          return Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                if (!isSelected) {
-                  MoglogHaptics.selectionChanged();
-                  onSelected(i);
-                }
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 170),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? (activeColor ?? (c.isDark ? c.elevatedSurface : Colors.white))
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: c.isDark ? 0.25 : 0.08),
-                            blurRadius: 4,
-                            offset: const Offset(0, 1),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    labels[i],
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: t.footnote.copyWith(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final segmentWidth = labels.isNotEmpty
+            ? (constraints.maxWidth - 6) / labels.length
+            : constraints.maxWidth;
+        final double labelFontSize;
+        if (segmentWidth < 58) {
+          labelFontSize = 9.5;
+        } else if (segmentWidth < 74) {
+          labelFontSize = 10.5;
+        } else if (segmentWidth < 92) {
+          labelFontSize = 11.5;
+        } else {
+          labelFontSize = 13.0;
+        }
+
+        return Container(
+          height: 36,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: c.tertiaryBackground,
+            borderRadius: MoglogShapes.control,
+          ),
+          child: Row(
+            children: List.generate(labels.length, (i) {
+              final isSelected = i == selectedIndex;
+              return Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (!isSelected) {
+                      MoglogHaptics.selectionChanged();
+                      onSelected(i);
+                    }
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 170),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
                       color: isSelected
-                          ? (activeColor != null ? c.onAccent : c.label)
-                          : c.secondaryLabel,
+                          ? (activeColor ??
+                              (c.isDark ? c.elevatedSurface : Colors.white))
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: Colors.black
+                                    .withValues(alpha: c.isDark ? 0.25 : 0.08),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          labels[i],
+                          maxLines: 1,
+                          softWrap: false,
+                          style: t.footnote.copyWith(
+                            fontSize: labelFontSize,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w500,
+                            color: isSelected
+                                ? (activeColor != null ? c.onAccent : c.label)
+                                : c.secondaryLabel,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          );
-        }),
-      ),
+              );
+            }),
+          ),
+        );
+      },
     );
   }
 }
@@ -704,6 +867,7 @@ class ActionSheetItem {
   final bool isDestructive;
   final bool isSelected;
   final VoidCallback onTap;
+  final String? infoDescription;
 
   const ActionSheetItem({
     required this.label,
@@ -711,6 +875,7 @@ class ActionSheetItem {
     this.icon,
     this.isDestructive = false,
     this.isSelected = false,
+    this.infoDescription,
   });
 }
 
@@ -788,8 +953,13 @@ Future<void> showIosActionSheet({
                       const SizedBox(height: 4),
                       Text(
                         message,
-                        style: t.footnote.copyWith(color: c.secondaryLabel),
+                        style: t.caption.copyWith(
+                          color: c.secondaryLabel,
+                          fontSize: 11.5,
+                        ),
                         textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ],
@@ -829,7 +999,10 @@ Future<void> showIosActionSheet({
                             Expanded(
                               child: Text(
                                 actions[i].label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: t.callout.copyWith(
+                                  fontSize: 15,
                                   fontWeight: actions[i].isSelected
                                       ? FontWeight.w600
                                       : FontWeight.w500,
@@ -839,6 +1012,14 @@ Future<void> showIosActionSheet({
                                 ),
                               ),
                             ),
+                            if (actions[i].infoDescription != null &&
+                                actions[i].infoDescription!.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              IosInfoButton(
+                                title: actions[i].label,
+                                description: actions[i].infoDescription!,
+                              ),
+                            ],
                             if (actions[i].isSelected)
                               Icon(MoglogIcons.check, size: 18, color: c.accent),
                           ],

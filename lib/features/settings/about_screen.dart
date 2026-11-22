@@ -275,8 +275,8 @@ class _AboutScreenState extends State<AboutScreen> {
                     IosGroupedRow(
                       title: 'GitHub Releases',
                       subtitle: _totalDownloads != null
-                          ? 'Changelog & APK downloads • $_totalDownloads total downloads'
-                          : 'Changelog & signed APK downloads',
+                          ? 'APK downloads • $_totalDownloads downloads'
+                          : 'Changelog & APK downloads',
                       icon: MoglogIcons.externalLink,
                       iconBackground: c.secondaryLabel,
                       showChevron: true,
@@ -289,8 +289,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     ),
                     IosGroupedRow(
                       title: 'Report an Issue / Bug',
-                      subtitle:
-                          'Open an error report or feature request on GitHub',
+                      subtitle: 'Submit bug reports or requests on GitHub',
                       icon: MoglogIcons.externalLink,
                       iconBackground: c.destructive,
                       showChevron: true,
@@ -433,15 +432,16 @@ class _AboutScreenState extends State<AboutScreen> {
                 ),
                 const SizedBox(height: 18),
 
-                // Section 3: Architecture & Legal
+                // Section 3: Privacy & Legal
                 IosGroupedSection(
-                  header: 'Architecture & Legal',
-                  footer:
-                      'This product uses the TMDB API but is not endorsed or certified by TMDB.',
+                  header: 'Privacy & Legal',
+                  footer: 'Uses the TMDB API; not endorsed by TMDB.',
                   children: [
                     IosGroupedRow(
-                      title: 'Privacy & Security Architecture',
-                      subtitle: 'Local-first SQLCipher 256-bit AES encryption',
+                      title: 'Privacy & Security',
+                      subtitle: 'On-device data protection',
+                      infoDescription:
+                          'Detailed security architecture specs are listed on the Moglog instructions website and inside Privacy & Security.',
                       icon: MoglogIcons.shield,
                       iconBackground: c.accent,
                       showChevron: true,

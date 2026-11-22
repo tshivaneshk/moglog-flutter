@@ -175,14 +175,28 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Backup Passphrase',
-                  style: t.title3.copyWith(color: c.label),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'Backup Passphrase',
+                        style: t.title3.copyWith(color: c.label),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const IosInfoButton(
+                      title: 'Encryption Details',
+                      description:
+                          'End-to-end cloud backups are encrypted on your device using PBKDF2-HMAC-SHA256 (600,000 iterations) + AES-256-GCM before upload.',
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Used for zero-knowledge PBKDF2-HMAC-SHA256 (600,000 iterations) + AES-256-GCM cloud backups. Minimum 6 characters.',
-                  style: t.footnote.copyWith(color: c.secondaryLabel),
+                  'Protects your encrypted cloud backups (min 6 chars).',
+                  style: t.caption.copyWith(color: c.secondaryLabel, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 14),
                 Container(
@@ -495,23 +509,25 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                       IosGroupedRow(
                         title: 'Back Up Now',
                         subtitle: authState.isSyncing
-                            ? 'Syncing with Firestore…'
-                            : 'Push local library & shelves to cloud',
+                            ? 'Syncing with cloud…'
+                            : 'Save library & shelves to cloud',
                         icon: MoglogIcons.upload,
                         iconBackground: c.accent,
                         onTap: authState.isSyncing ? null : _handleBackUpNow,
                       ),
                       IosGroupedRow(
                         title: 'Restore from Cloud',
-                        subtitle: 'Merge cloud backup into this device',
+                        subtitle: 'Merge cloud backup to this device',
                         icon: MoglogIcons.download,
                         iconBackground: c.statusPlanned,
                         onTap:
                             authState.isSyncing ? null : _handleRestoreFromCloud,
                       ),
                       IosSwitchRow(
-                        title: 'End-to-End Encrypted Backup',
-                        subtitle: 'PBKDF2 600k + AES-256-GCM before upload',
+                        title: 'Encrypted Cloud Backup',
+                        subtitle: 'Lock cloud sync with your passphrase',
+                        infoDescription:
+                            'Encrypts your library client-side using PBKDF2-HMAC-SHA256 (600,000 iterations) and AES-256-GCM before uploading.',
                         icon: MoglogIcons.lock,
                         iconBackground: c.statusWatching,
                         value: settings.encryptedCloudBackupEnabled,
@@ -542,7 +558,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     children: [
                       IosGroupedRow(
                         title: 'Sign Out',
-                        subtitle: 'Your local library and TMDB key stay safe',
+                        subtitle: 'Keeps local library & TMDB key',
                         icon: MoglogIcons.person,
                         iconBackground: c.secondaryLabel,
                         onTap: () {

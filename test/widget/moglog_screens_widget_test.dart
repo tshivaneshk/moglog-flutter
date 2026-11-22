@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moglog_flutter/app/providers.dart';
+import 'package:moglog_flutter/core/design_system/icons.dart';
 import 'package:moglog_flutter/core/design_system/theme.dart';
 import 'package:moglog_flutter/domain/model/app_settings.dart';
 import 'package:moglog_flutter/domain/model/drama.dart';
@@ -108,12 +109,39 @@ void main() {
     expect(find.text('Status Breakdown'), findsOneWidget);
   });
 
-  testWidgets('PrivacyScreen renders faithfully', (tester) async {
+  testWidgets('PrivacyScreen hides tech stack behind info popup button', (tester) async {
     await tester.pumpWidget(
       _wrapWithApp(PrivacyScreen(onBack: () {})),
     );
     await tester.pumpAndSettle();
     expect(find.text('Built for Local-First Privacy'), findsOneWidget);
+    expect(find.textContaining('SQLCipher'), findsNothing);
+
+    await tester.tap(find.byIcon(MoglogIcons.info).first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('SQLCipher'), findsOneWidget);
+  });
+
+  testWidgets('LibraryScreen shows full numbers on Watching and Planned tabs', (tester) async {
+    final dramas = [
+      const Drama(id: 1, title: 'Show A', status: 'Watching'),
+      const Drama(id: 2, title: 'Show B', status: 'Planned'),
+    ];
+    await tester.pumpWidget(
+      _wrapWithApp(
+        LibraryScreen(
+          onDramaTap: (_) {},
+          onNavigateToDiscover: () {},
+        ),
+        overrides: [
+          currentDramasProvider.overrideWithValue(dramas),
+          currentSettingsProvider.overrideWithValue(const AppSettings()),
+          librarySelectedStatusProvider.overrideWith((_) => 'Watching'),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Watching (1)'), findsOneWidget);
   });
 
   testWidgets('AppearanceSettingsScreen renders faithfully', (tester) async {
