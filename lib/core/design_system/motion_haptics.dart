@@ -60,7 +60,11 @@ class _IosPressableState extends State<IosPressable> {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final isInteractive = widget.enabled && (widget.onTap != null || widget.onLongPress != null);
 
-    return GestureDetector(
+    return Semantics(
+      button: isInteractive,
+      enabled: isInteractive,
+      container: false,
+      child: GestureDetector(
       behavior: widget.behavior,
       onTapDown: isInteractive ? (_) => _setPressed(true) : null,
       onTapUp: isInteractive ? (_) => _setPressed(false) : null,
@@ -88,6 +92,7 @@ class _IosPressableState extends State<IosPressable> {
           child: widget.child,
         ),
       ),
+    ),
     );
   }
 }

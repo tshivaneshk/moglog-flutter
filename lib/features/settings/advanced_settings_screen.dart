@@ -89,6 +89,7 @@ class _AdvancedSettingsScreenState
     String? error;
 
     showIosBottomSheet<void>(
+      disposeAfter: [ctrl],
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
@@ -317,6 +318,7 @@ class _AdvancedSettingsScreenState
     var obscure = true;
 
     showIosBottomSheet<void>(
+      disposeAfter: [ctrl],
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
@@ -516,6 +518,7 @@ class _AdvancedSettingsScreenState
     String? error;
 
     showIosBottomSheet<void>(
+      disposeAfter: [ctrl],
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {

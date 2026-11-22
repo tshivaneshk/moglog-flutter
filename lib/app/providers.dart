@@ -375,6 +375,15 @@ class DramaController {
           _transientDramas[d.id] = d;
         }
       }
+      final allEmpty = results.every((l) => l.isEmpty);
+      if (allEmpty) {
+        // Repository swallows transport errors; surface a friendly retryable state.
+        ref.read(discoverRailsProvider.notifier).state = current.copyWith(
+          isLoading: false,
+          error: 'Could not reach TMDB. Check your connection and API key, then retry.',
+        );
+        return;
+      }
       ref.read(discoverRailsProvider.notifier).state = DiscoverRailsState(
         isLoading: false,
         trending: results[0],
@@ -418,6 +427,8 @@ class DramaController {
     );
     _searchDebounce = Timer(const Duration(milliseconds: 450), () async {
       final results = await _repo.searchDramas(query);
+      // Drop stale responses: a slower earlier query must never overwrite a newer one.
+      if (ref.read(discoverSearchProvider).query != query) return;
       for (final d in results) {
         _transientDramas[d.id] = d;
       }

@@ -126,7 +126,17 @@ class _MoglogAppState extends ConsumerState<MoglogApp> {
       builder: (context, child) {
         return Stack(
           children: [
-            child ?? const SizedBox.shrink(),
+            // Clamp system font scaling so extreme accessibility sizes stay usable
+            // without breaking single-line chips, tabs, and headers.
+            MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: MediaQuery.textScalerOf(context).clamp(
+                  minScaleFactor: 0.9,
+                  maxScaleFactor: 1.25,
+                ),
+              ),
+              child: child ?? const SizedBox.shrink(),
+            ),
 
             // Global Confetti Celebration Overlay
             if (celebrationKey > 0)

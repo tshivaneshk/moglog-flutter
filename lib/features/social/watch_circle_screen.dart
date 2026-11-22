@@ -161,6 +161,7 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
       ..sort((a, b) => b.effectiveRating.compareTo(a.effectiveRating));
 
     showIosBottomSheet<void>(
+      disposeAfter: [searchCtrl],
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {

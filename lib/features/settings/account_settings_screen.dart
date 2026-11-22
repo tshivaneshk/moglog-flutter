@@ -111,6 +111,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     );
 
     showIosBottomSheet<void>(
+      disposeAfter: [ctrl],
       context: context,
       builder: (ctx) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -165,6 +166,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     String? error;
 
     showIosBottomSheet<void>(
+      disposeAfter: [ctrl],
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {

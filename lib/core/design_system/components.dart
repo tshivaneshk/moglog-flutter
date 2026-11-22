@@ -10,6 +10,7 @@ import 'icons.dart';
 import 'motion_haptics.dart';
 import 'shapes.dart';
 import 'theme.dart';
+import 'tokens.dart';
 
 /// Translucent frosted iOS navigation/tab bar matching Kotlin `IosFrostedBar`.
 /// Uses pure translucent surface without expensive live BackdropFilter overdraw so 120Hz scrolling stays locked.
@@ -893,9 +894,34 @@ Future<T?> showIosBottomSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool isScrollControlled = true,
+  List<ChangeNotifier> disposeAfter = const [],
 }) {
   final c = context.colors;
   final maxH = MediaQuery.sizeOf(context).height * 0.84;
+  return _showIosBottomSheetImpl<T>(
+    context: context,
+    c: c,
+    maxH: maxH,
+    builder: builder,
+    isScrollControlled: isScrollControlled,
+  ).whenComplete(() {
+    if (disposeAfter.isEmpty) return;
+    // Dispose after the dismiss animation finishes to avoid use-after-dispose.
+    Future<void>.delayed(const Duration(milliseconds: 450), () {
+      for (final n in disposeAfter) {
+        n.dispose();
+      }
+    });
+  });
+}
+
+Future<T?> _showIosBottomSheetImpl<T>({
+  required BuildContext context,
+  required MoglogColors c,
+  required double maxH,
+  required WidgetBuilder builder,
+  required bool isScrollControlled,
+}) {
   return showModalBottomSheet<T>(
     context: context,
     useRootNavigator: true,
