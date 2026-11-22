@@ -720,9 +720,12 @@ Future<T?> showIosBottomSheet<T>({
   bool isScrollControlled = true,
 }) {
   final c = context.colors;
+  final maxH = MediaQuery.sizeOf(context).height * 0.84;
   return showModalBottomSheet<T>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: isScrollControlled,
+    constraints: BoxConstraints(maxHeight: maxH),
     backgroundColor: c.secondaryBackground,
     barrierColor: Colors.black.withValues(alpha: 0.6),
     shape: const RoundedRectangleBorder(borderRadius: MoglogShapes.topSheet),

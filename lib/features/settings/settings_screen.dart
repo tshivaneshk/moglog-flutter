@@ -262,10 +262,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 // About
                 IosGroupedSection(
                   header: 'About',
+                  footer:
+                      'This product uses the TMDB API but is not endorsed or certified by TMDB.',
                   children: [
                     IosGroupedRow(
-                      title: 'About Moglog',
-                      subtitle: 'Updates, GitHub Releases, Privacy & Security',
+                      title: 'About',
+                      subtitle: 'Developer, updates & legal',
                       icon: MoglogIcons.award,
                       iconBackground: c.accent,
                       showChevron: true,
@@ -273,9 +275,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     IosGroupedRow(
                       title: 'Version',
-                      subtitle: 'v$_versionName (SQLCipher + E2E)',
-                      icon: MoglogIcons.lock,
-                      iconBackground: c.tertiaryBackground,
+                      trailing: Text(
+                        _versionName,
+                        style: t.body.copyWith(color: c.secondaryLabel),
+                      ),
                       showDivider: false,
                     ),
                   ],

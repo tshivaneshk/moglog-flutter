@@ -115,7 +115,6 @@ class _DramaContextMenuContentState extends State<_DramaContextMenuContent> {
           IosSegmentedControl(
             labels: _statuses,
             selectedIndex: _statuses.indexOf(_status).clamp(0, 2),
-            activeColor: c.statusColor(_status),
             onSelected: (idx) {
               setState(() => _status = _statuses[idx]);
               widget.onChangeStatus(_statuses[idx]);

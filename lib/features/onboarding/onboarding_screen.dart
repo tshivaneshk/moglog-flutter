@@ -177,250 +177,283 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ),
             Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (i) => setState(() => _step = i),
-                children: [
-                  // Step 0: Welcome
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 92,
-                          height: 92,
-                          decoration: ShapeDecoration(
-                            shape: MoglogShapes.smooth(
-                              24,
-                              side: BorderSide(
-                                color: c.accent.withValues(alpha: 0.4),
-                                width: 1.2,
+              child: LayoutBuilder(
+                builder: (context, viewport) => PageView(
+                  controller: _pageController,
+                  onPageChanged: (i) => setState(() => _step = i),
+                  children: [
+                    // Step 0: Welcome (centered vertically & horizontally)
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: (viewport.maxHeight - 32).clamp(0, 1200),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 92,
+                              height: 92,
+                              decoration: ShapeDecoration(
+                                shape: MoglogShapes.smooth(
+                                  24,
+                                  side: BorderSide(
+                                    color: c.accent.withValues(alpha: 0.4),
+                                    width: 1.2,
+                                  ),
+                                ),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Image.asset(
+                                'assets/images/app_logo2.png',
+                                fit: BoxFit.cover,
                               ),
                             ),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: Image.asset(
-                            'assets/images/app_logo2.png',
-                            fit: BoxFit.cover,
-                          ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Welcome to Moglog',
+                              style: t.title1.copyWith(color: c.label),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'A clean, fluid library for your dramas, series, and anime—encrypted on your device by default.',
+                              style: t.subhead.copyWith(color: c.secondaryLabel),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 28),
+                            _FeatureHighlightTile(
+                              icon: MoglogIcons.library,
+                              color: c.accent,
+                              title: 'Track Every Episode',
+                              subtitle:
+                                  'Multi-season steppers, binge time estimates, custom shelves, and completion celebrations.',
+                            ),
+                            const SizedBox(height: 12),
+                            _FeatureHighlightTile(
+                              icon: MoglogIcons.shield,
+                              color: c.statusPlanned,
+                              title: 'Local-First SQLCipher Encryption',
+                              subtitle:
+                                  'Your library and watch ratings stay encrypted on-device with 256-bit AES.',
+                            ),
+                            const SizedBox(height: 12),
+                            _FeatureHighlightTile(
+                              icon: MoglogIcons.users,
+                              color: c.statusWatching,
+                              title: 'Watch Circle & Taste Blend',
+                              subtitle:
+                                  'Compare compatibility with friends, race co-watched episodes, and send quick nudges.',
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Welcome to Moglog',
-                          style: t.title1.copyWith(color: c.label),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          'A clean, fluid library for your dramas, series, and anime—encrypted on your device by default.',
-                          style: t.subhead.copyWith(color: c.secondaryLabel),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 28),
-                        _FeatureHighlightTile(
-                          icon: MoglogIcons.library,
-                          color: c.accent,
-                          title: 'Track Every Episode',
-                          subtitle:
-                              'Multi-season steppers, binge time estimates, custom shelves, and completion celebrations.',
-                        ),
-                        const SizedBox(height: 12),
-                        _FeatureHighlightTile(
-                          icon: MoglogIcons.shield,
-                          color: c.statusPlanned,
-                          title: 'Local-First SQLCipher Encryption',
-                          subtitle:
-                              'Your library, ratings, and notes stay encrypted on-device with 256-bit AES.',
-                        ),
-                        const SizedBox(height: 12),
-                        _FeatureHighlightTile(
-                          icon: MoglogIcons.users,
-                          color: c.statusWatching,
-                          title: 'Watch Circle & Taste Blend',
-                          subtitle:
-                              'Compare compatibility with friends, race co-watched episodes, and send quick nudges.',
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
 
-                  // Step 1: TMDB Credential
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: c.accentSubtle,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          alignment: Alignment.center,
-                          child: Icon(MoglogIcons.key, size: 28, color: c.accent),
+                    // Step 1: TMDB Credential (centered matching Kotlin OnboardingScreen)
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: (viewport.maxHeight - 32).clamp(0, 1200),
                         ),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Connect to TMDB',
-                          style: t.title1.copyWith(color: c.label),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Paste your free TMDB v3 API Key (32 hex chars) or v4 Read Access Token to unlock search, posters, cast, and air dates.',
-                          style: t.subhead.copyWith(color: c.secondaryLabel),
-                        ),
-                        const SizedBox(height: 20),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: c.secondaryBackground,
-                            borderRadius: MoglogShapes.card,
-                            border: Border.all(
-                              color: _keyError != null ? c.destructive : c.separator,
-                              width: 1,
-                            ),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 6,
-                          ),
-                          child: TextField(
-                            controller: _tmdbCtrl,
-                            style: t.subhead.copyWith(color: c.label),
-                            maxLines: 3,
-                            minLines: 2,
-                            cursorColor: c.accent,
-                            onChanged: (_) {
-                              if (_keyError != null) {
-                                setState(() => _keyError = null);
-                              }
-                            },
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              hintText: 'Paste TMDB API Key or v4 Read Token…',
-                              hintStyle:
-                                  t.subhead.copyWith(color: c.tertiaryLabel),
-                            ),
-                          ),
-                        ),
-                        if (_keyError != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            _keyError!,
-                            style: t.footnote.copyWith(color: c.destructive),
-                          ),
-                        ],
-                        const SizedBox(height: 14),
-                        Row(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Expanded(
-                              child: IosSecondaryButton(
-                                text: 'Paste from Clipboard',
-                                leadingIcon: MoglogIcons.copy,
-                                onTap: _pasteClipboard,
+                            Container(
+                              width: 76,
+                              height: 76,
+                              decoration: BoxDecoration(
+                                color: c.accentSubtle,
+                                borderRadius: BorderRadius.circular(22),
+                              ),
+                              alignment: Alignment.center,
+                              child:
+                                  Icon(MoglogIcons.key, size: 36, color: c.accent),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Connect to TMDB',
+                              style: t.title1.copyWith(color: c.label),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Paste your free TMDB v3 API Key (32 hex chars) or v4 Read Access Token to unlock search, posters, cast, and air dates.',
+                              style: t.subhead.copyWith(color: c.secondaryLabel),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 24),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: c.secondaryBackground,
+                                borderRadius: MoglogShapes.card,
+                                border: Border.all(
+                                  color: _keyError != null
+                                      ? c.destructive
+                                      : c.separator,
+                                  width: 1,
+                                ),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 6,
+                              ),
+                              child: TextField(
+                                controller: _tmdbCtrl,
+                                style: t.subhead.copyWith(color: c.label),
+                                maxLines: 3,
+                                minLines: 2,
+                                cursorColor: c.accent,
+                                onChanged: (_) {
+                                  if (_keyError != null) {
+                                    setState(() => _keyError = null);
+                                  }
+                                },
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  hintText:
+                                      'Paste TMDB API Key or v4 Read Token…',
+                                  hintStyle: t.subhead
+                                      .copyWith(color: c.tertiaryLabel),
+                                ),
+                              ),
+                            ),
+                            if (_keyError != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                _keyError!,
+                                style: t.footnote.copyWith(color: c.destructive),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                            const SizedBox(height: 14),
+                            IosSecondaryButton(
+                              text: 'Paste from Clipboard',
+                              leadingIcon: MoglogIcons.copy,
+                              onTap: _pasteClipboard,
+                            ),
+                            const SizedBox(height: 10),
+                            IosPressable(
+                              onTap: _showHowToGetKeySheet,
+                              hapticOnTap: true,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Text(
+                                  'How to get a free TMDB key',
+                                  style: t.subhead.copyWith(
+                                    color: c.accent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                        Center(
-                          child: IosPressable(
-                            onTap: _showHowToGetKeySheet,
-                            hapticOnTap: true,
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Text(
-                                'How to get a free TMDB key',
-                                style: t.subhead.copyWith(
-                                  color: c.accent,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                      ),
+                    ),
+
+                    // Step 2: Optional Cloud Sync (centered matching Kotlin OnboardingScreen)
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: (viewport.maxHeight - 32).clamp(0, 1200),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 76,
+                              height: 76,
+                              decoration: BoxDecoration(
+                                color: c.statusPlanned.withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(22),
+                              ),
+                              alignment: Alignment.center,
+                              child: Icon(
+                                MoglogIcons.cloud,
+                                size: 36,
+                                color: c.statusPlanned,
                               ),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Step 2: Optional Cloud Sync
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: c.statusPlanned.withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          alignment: Alignment.center,
-                          child: Icon(
-                            MoglogIcons.cloud,
-                            size: 28,
-                            color: c.statusPlanned,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Zero-Knowledge Cloud Sync',
-                          style: t.title1.copyWith(color: c.label),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Optionally sign in with Google and set a passphrase to back up your library with AES-256-GCM end-to-end encryption.',
-                          style: t.subhead.copyWith(color: c.secondaryLabel),
-                        ),
-                        const SizedBox(height: 24),
-                        if (authState.user != null)
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: ShapeDecoration(
-                              color: c.secondaryBackground,
-                              shape: MoglogShapes.smooth(14),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Zero-Knowledge Cloud Sync',
+                              style: t.title1.copyWith(color: c.label),
+                              textAlign: TextAlign.center,
                             ),
-                            child: Row(
-                              children: [
-                                Icon(MoglogIcons.check, color: c.accent),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    'Signed in as ${authState.user!.email ?? authState.user!.displayName ?? "Google Account"}',
-                                    style: t.subhead.copyWith(color: c.label),
-                                  ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Optionally sign in with Google and set a passphrase to back up your library with AES-256-GCM end-to-end encryption.',
+                              style: t.subhead.copyWith(color: c.secondaryLabel),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 24),
+                            if (authState.user != null)
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: ShapeDecoration(
+                                  color: c.secondaryBackground,
+                                  shape: MoglogShapes.smooth(14),
                                 ),
-                              ],
-                            ),
-                          )
-                        else
-                          IosSecondaryButton(
-                            text: _signingIn
-                                ? 'Signing in…'
-                                : 'Sign In with Google',
-                            leadingIcon: MoglogIcons.person,
-                            onTap: _signingIn
-                                ? null
-                                : () async {
-                                    setState(() => _signingIn = true);
-                                    final err = await ref
-                                        .read(authControllerProvider.notifier)
-                                        .signInWithGoogle();
-                                    if (mounted) {
-                                      setState(() => _signingIn = false);
-                                      if (err != null) {
-                                        ref
-                                            .read(toastProvider.notifier)
-                                            .show(err);
-                                      }
-                                    }
-                                  },
-                          ),
-                      ],
+                                child: Row(
+                                  children: [
+                                    Icon(MoglogIcons.check, color: c.accent),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Signed in as ${authState.user!.email ?? authState.user!.displayName ?? "Google Account"}',
+                                        style: t.subhead.copyWith(color: c.label),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              IosSecondaryButton(
+                                text: _signingIn
+                                    ? 'Signing in…'
+                                    : 'Sign In with Google',
+                                leadingIcon: MoglogIcons.person,
+                                onTap: _signingIn
+                                    ? null
+                                    : () async {
+                                        setState(() => _signingIn = true);
+                                        final err = await ref
+                                            .read(
+                                              authControllerProvider.notifier,
+                                            )
+                                            .signInWithGoogle();
+                                        if (mounted) {
+                                          setState(() => _signingIn = false);
+                                          if (err != null) {
+                                            ref
+                                                .read(toastProvider.notifier)
+                                                .show(err);
+                                          }
+                                        }
+                                      },
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             Padding(

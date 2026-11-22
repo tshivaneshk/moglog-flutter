@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 import 'package:share_plus/share_plus.dart';
@@ -50,6 +52,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   Timer? _autosaveDebounce;
 
   static const _statuses = ['Watching', 'Planned', 'Done'];
+  static final Map<String, Color> _posterTintCache = {};
 
   @override
   void initState() {
@@ -65,8 +68,14 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     if (resolved != null) {
       _drama = resolved;
       _isSaved = local != null && !local.isDeleted;
+      final cachedTint = _posterTintCache[resolved.posterPath];
+      if (cachedTint != null &&
+          ref.read(currentSettingsProvider).dynamicPosterTint) {
+        _dynamicAccent = cachedTint;
+      }
       setState(() => _loading = false);
-      if (ref.read(currentSettingsProvider).dynamicPosterTint) {
+      if (cachedTint == null &&
+          ref.read(currentSettingsProvider).dynamicPosterTint) {
         unawaited(_extractPosterAccent(resolved.posterPath));
       }
     } else {
@@ -104,37 +113,68 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 
   Future<void> _extractPosterAccent(String posterUrl) async {
     if (posterUrl.trim().isEmpty) return;
+    final cached = _posterTintCache[posterUrl];
+    if (cached != null) {
+      if (mounted) setState(() => _dynamicAccent = cached);
+      return;
+    }
     try {
-      final thumbUrl = posterUrl.replaceFirst('/w500/', '/w185/');
-      final res = await Dio().get<List<int>>(
-        thumbUrl,
-        options: Options(responseType: ResponseType.bytes),
-      );
-      final bytes = res.data;
-      if (bytes == null || bytes.isEmpty) return;
-      final decoded = img.decodeImage(Uint8List.fromList(bytes));
-      if (decoded == null) return;
-      final resized = img.copyResize(decoded, width: 24, height: 36);
-      HSLColor? best;
-      double bestScore = -1;
-      for (var y = 0; y < resized.height; y++) {
-        for (var x = 0; x < resized.width; x++) {
-          final p = resized.getPixel(x, y);
-          final color = Color.fromARGB(255, p.r.toInt(), p.g.toInt(), p.b.toInt());
-          final hsl = HSLColor.fromColor(color);
-          if (hsl.saturation < 0.28 || hsl.lightness < 0.22 || hsl.lightness > 0.78) {
-            continue;
-          }
-          final score = hsl.saturation * (1.0 - (hsl.lightness - 0.5).abs());
-          if (score > bestScore) {
-            bestScore = score;
-            best = hsl;
-          }
+      Uint8List? bytes;
+      // 1. Check already-cached poster file on disk (zero network wait)
+      final cachedFile = await DefaultCacheManager().getFileFromCache(posterUrl);
+      if (cachedFile != null && await cachedFile.file.exists()) {
+        bytes = await cachedFile.file.readAsBytes();
+      } else {
+        // 2. Fallback to tiny w92 thumbnail for instant network extraction
+        final thumbUrl = posterUrl
+            .replaceFirst('/w500/', '/w92/')
+            .replaceFirst('/w342/', '/w92/');
+        final res = await Dio().get<List<int>>(
+          thumbUrl,
+          options: Options(responseType: ResponseType.bytes),
+        );
+        final raw = res.data;
+        if (raw != null && raw.isNotEmpty) {
+          bytes = Uint8List.fromList(raw);
         }
       }
-      if (best != null && mounted) {
-        final vibrant = best.withLightness(best.lightness.clamp(0.45, 0.65)).toColor();
-        setState(() => _dynamicAccent = vibrant);
+      if (bytes == null || bytes.isEmpty) return;
+      final inputBytes = bytes;
+      final vibrantValue = await Isolate.run<int?>(() {
+        final decoded = img.decodeImage(inputBytes);
+        if (decoded == null) return null;
+        final resized = img.copyResize(decoded, width: 20, height: 30);
+        HSLColor? best;
+        double bestScore = -1;
+        for (var y = 0; y < resized.height; y++) {
+          for (var x = 0; x < resized.width; x++) {
+            final p = resized.getPixel(x, y);
+            final color = Color.fromARGB(255, p.r.toInt(), p.g.toInt(), p.b.toInt());
+            final hsl = HSLColor.fromColor(color);
+            if (hsl.saturation < 0.28 ||
+                hsl.lightness < 0.22 ||
+                hsl.lightness > 0.78) {
+              continue;
+            }
+            final score = hsl.saturation * (1.0 - (hsl.lightness - 0.5).abs());
+            if (score > bestScore) {
+              bestScore = score;
+              best = hsl;
+            }
+          }
+        }
+        if (best == null) return null;
+        return best.withLightness(best.lightness.clamp(0.45, 0.65)).toColor().toARGB32();
+      });
+      if (vibrantValue != null) {
+        final vibrant = Color(vibrantValue);
+        if (_posterTintCache.length > 64) {
+          _posterTintCache.remove(_posterTintCache.keys.first);
+        }
+        _posterTintCache[posterUrl] = vibrant;
+        if (mounted) {
+          setState(() => _dynamicAccent = vibrant);
+        }
       }
     } catch (_) {}
   }
@@ -556,11 +596,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 
         const SizedBox(height: 16),
 
-        // Status Segmented Control
+        // Status Segmented Control (matching Kotlin IosSegmentedControl)
         IosSegmentedControl(
           labels: statusLabels,
           selectedIndex: _statuses.indexOf(drama.status).clamp(0, 2),
-          activeColor: c.statusColor(drama.status),
           onSelected: (idx) {
             final newStatus = _statuses[idx];
             final prevStatus = drama.status;
@@ -812,7 +851,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
           ),
         ],
 
-        SizedBox(height: _isSaved ? 48 : 112),
+        SizedBox(height: _isSaved ? 48 : 132),
       ],
     );
 

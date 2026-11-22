@@ -146,7 +146,7 @@ class _MoglogAppState extends ConsumerState<MoglogApp> {
               Positioned(
                 left: 16,
                 right: 16,
-                bottom: 78,
+                bottom: 92,
                 child: SafeArea(
                   top: false,
                   child: Center(
