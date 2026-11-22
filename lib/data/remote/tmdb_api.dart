@@ -1,10 +1,18 @@
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 
 import '../../core/security/secure_store.dart';
 import '../../domain/model/drama.dart';
 import '../../domain/model/drama_extra_details.dart';
+
+class _RawDetailEntry {
+  final Map<String, dynamic> data;
+  final int cachedAtMs;
+  const _RawDetailEntry(this.data, this.cachedAtMs);
+}
 
 class TmdbApi {
   static const String baseUrl = 'https://api.themoviedb.org/3/';
@@ -12,6 +20,8 @@ class TmdbApi {
   static const String backdropBaseUrl = 'https://image.tmdb.org/t/p/w780';
   static const String logoBaseUrl = 'https://image.tmdb.org/t/p/w154';
   static const String thumbBaseUrl = 'https://image.tmdb.org/t/p/w185';
+
+  static const int _rawMemoryTtlMs = 5 * 60 * 1000;
 
   static const Map<int, String> genreMap = {
     10759: 'Action & Adventure',
@@ -44,17 +54,35 @@ class TmdbApi {
 
   final SecureStore secureStore;
   late final Dio _dio;
+  final Map<int, _RawDetailEntry> _rawDetailCache = {};
+  final Map<int, Future<Map<String, dynamic>?>> _inFlightDetails = {};
 
   TmdbApi({required this.secureStore, Dio? dio}) {
     _dio = dio ??
         Dio(
           BaseOptions(
             baseUrl: baseUrl,
-            connectTimeout: const Duration(seconds: 12),
-            receiveTimeout: const Duration(seconds: 15),
-            headers: const {'Accept': 'application/json'},
+            connectTimeout: const Duration(seconds: 8),
+            receiveTimeout: const Duration(seconds: 10),
+            sendTimeout: const Duration(seconds: 8),
+            headers: const {
+              'Accept': 'application/json',
+              'Accept-Encoding': 'gzip',
+            },
           ),
         );
+    if (dio == null) {
+      _dio.httpClientAdapter = IOHttpClientAdapter(
+        createHttpClient: () {
+          final client = HttpClient();
+          client.maxConnectionsPerHost = 12;
+          client.idleTimeout = const Duration(seconds: 30);
+          client.connectionTimeout = const Duration(seconds: 8);
+          client.autoUncompress = true;
+          return client;
+        },
+      );
+    }
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -71,8 +99,30 @@ class TmdbApi {
           }
           handler.next(options);
         },
+        onError: (err, handler) async {
+          final extra = err.requestOptions.extra;
+          final alreadyRetried = extra['_retried'] == true;
+          final status = err.response?.statusCode ?? 0;
+          final isRetryable = err.type == DioExceptionType.connectionTimeout ||
+              err.type == DioExceptionType.receiveTimeout ||
+              err.type == DioExceptionType.connectionError ||
+              (status >= 500 && status < 600);
+          if (!alreadyRetried && isRetryable) {
+            extra['_retried'] = true;
+            await Future<void>.delayed(const Duration(milliseconds: 220));
+            try {
+              final retried = await _dio.fetch<dynamic>(err.requestOptions);
+              return handler.resolve(retried);
+            } catch (_) {}
+          }
+          handler.next(err);
+        },
       ),
     );
+  }
+
+  void clearMemoryCache() {
+    _rawDetailCache.clear();
   }
 
   Future<List<Drama>> searchDramas(String query) async {
@@ -116,15 +166,41 @@ class TmdbApi {
   }
 
   Future<Map<String, dynamic>?> getRawDramaDetails(int id) async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      'tv/$id',
-      queryParameters: {
-        'language': 'en-US',
-        'append_to_response':
-            'credits,videos,watch/providers,recommendations,reviews',
-      },
-    );
-    return res.data;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cached = _rawDetailCache[id];
+    if (cached != null && (now - cached.cachedAtMs) < _rawMemoryTtlMs) {
+      return cached.data;
+    }
+    final existingFlight = _inFlightDetails[id];
+    if (existingFlight != null) {
+      return existingFlight;
+    }
+
+    final future = () async {
+      try {
+        final res = await _dio.get<Map<String, dynamic>>(
+          'tv/$id',
+          queryParameters: {
+            'language': 'en-US',
+            'append_to_response':
+                'credits,videos,watch/providers,recommendations,reviews',
+          },
+        );
+        final data = res.data;
+        if (data != null) {
+          if (_rawDetailCache.length >= 64) {
+            _rawDetailCache.remove(_rawDetailCache.keys.first);
+          }
+          _rawDetailCache[id] =
+              _RawDetailEntry(data, DateTime.now().millisecondsSinceEpoch);
+        }
+        return data;
+      } finally {
+        _inFlightDetails.remove(id);
+      }
+    }();
+    _inFlightDetails[id] = future;
+    return future;
   }
 
   List<Drama> _parseResultsList(Map<String, dynamic>? data) {
@@ -214,7 +290,7 @@ class TmdbApi {
             name: (c['name'] as String?) ?? '',
             character: (c['character'] as String?) ?? '',
             profilePath: profile != null && profile.isNotEmpty
-                ? '$imageBaseUrl$profile'
+                ? '$thumbBaseUrl$profile'
                 : null,
           ),
         );

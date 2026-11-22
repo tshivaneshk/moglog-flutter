@@ -25,6 +25,8 @@ class DramaRepositoryImpl {
 
   final Map<String, _CachedList> _searchMemoryCache = {};
   final Map<String, _CachedList> _railMemoryCache = {};
+  final Map<String, Future<List<Drama>>> _inFlightRails = {};
+  final Map<int, DramaExtraDetails> _extraMemoryCache = {};
 
   DramaRepositoryImpl({required this.api, required this.db});
 
@@ -77,52 +79,94 @@ class DramaRepositoryImpl {
         (now - cached.timestamp) < _discoverMemoryTtlMs) {
       return cached.items;
     }
-    try {
-      final fresh = await fetcher();
-      if (fresh.isNotEmpty) {
-        _railMemoryCache[key] = _CachedList(fresh, now);
-      }
-      return fresh;
-    } catch (_) {
-      return cached?.items ?? const [];
+    final inFlight = _inFlightRails[key];
+    if (!forceRefresh && inFlight != null) {
+      return inFlight;
     }
+    final Future<List<Drama>> future = () async {
+      try {
+        final fresh = await fetcher();
+        if (fresh.isNotEmpty) {
+          _railMemoryCache[key] =
+              _CachedList(fresh, DateTime.now().millisecondsSinceEpoch);
+        }
+        return fresh;
+      } catch (_) {
+        return cached?.items ?? const <Drama>[];
+      } finally {
+        _inFlightRails.remove(key);
+      }
+    }();
+    _inFlightRails[key] = future;
+    return future;
   }
 
-  Future<Drama?> getDramaDetails(int id) async {
+  /// Synchronous/instant lookup of extra details from RAM or 7-day SQLite cache.
+  DramaExtraDetails? getDramaExtraDetailsImmediate(
+    int id, {
+    bool allowStale = false,
+  }) {
+    final mem = _extraMemoryCache[id];
+    if (mem != null) return mem;
+
+    final cached = db.getDetailCache(id);
+    if (cached == null) return null;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (!allowStale && (now - cached.cachedAt) >= _cacheTtlMs) {
+      return null;
+    }
     try {
-      final dto = await api.getRawDramaDetails(id);
-      if (dto == null) return null;
-      return TmdbApi.dtoToDomainSummary(dto);
+      final decoded = jsonDecode(cached.payloadJson) as Map<String, dynamic>;
+      final parsed = DramaExtraDetails.fromJson(decoded);
+      if (_extraMemoryCache.length >= 64) {
+        _extraMemoryCache.remove(_extraMemoryCache.keys.first);
+      }
+      _extraMemoryCache[id] = parsed;
+      return parsed;
     } catch (_) {
       return null;
     }
   }
 
-  Future<DramaExtraDetails?> getDramaExtraDetails(int id) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final cached = db.getDetailCache(id);
-    if (cached != null && (now - cached.cachedAt) < _cacheTtlMs) {
-      try {
-        final decoded = jsonDecode(cached.payloadJson) as Map<String, dynamic>;
-        return DramaExtraDetails.fromJson(decoded);
-      } catch (_) {}
+  /// Fetches both summary and extra details in a SINGLE TMDB API call (with 7-day cache).
+  Future<({Drama? drama, DramaExtraDetails? extra})> fetchFullDrama(
+    int id, {
+    bool skipSummaryFetchIfCached = false,
+  }) async {
+    final cachedExtra = getDramaExtraDetailsImmediate(id);
+    if (cachedExtra != null && skipSummaryFetchIfCached) {
+      return (drama: null, extra: cachedExtra);
     }
 
     try {
       final dto = await api.getRawDramaDetails(id);
       if (dto == null) throw Exception('Empty TMDB response');
+      final summary = TmdbApi.dtoToDomainSummary(dto);
       final details = TmdbApi.parseExtraDetails(dto);
+      final now = DateTime.now().millisecondsSinceEpoch;
       db.putDetailCache(id, jsonEncode(details.toJson()), now);
-      return details;
-    } catch (_) {
-      if (cached != null) {
-        try {
-          final decoded = jsonDecode(cached.payloadJson) as Map<String, dynamic>;
-          return DramaExtraDetails.fromJson(decoded);
-        } catch (_) {}
+      if (_extraMemoryCache.length >= 64) {
+        _extraMemoryCache.remove(_extraMemoryCache.keys.first);
       }
-      return null;
+      _extraMemoryCache[id] = details;
+      return (drama: summary, extra: details);
+    } catch (_) {
+      final stale = cachedExtra ??
+          getDramaExtraDetailsImmediate(id, allowStale: true);
+      return (drama: null, extra: stale);
     }
+  }
+
+  Future<Drama?> getDramaDetails(int id) async {
+    final bundle = await fetchFullDrama(id);
+    return bundle.drama;
+  }
+
+  Future<DramaExtraDetails?> getDramaExtraDetails(int id) async {
+    final cached = getDramaExtraDetailsImmediate(id);
+    if (cached != null) return cached;
+    final bundle = await fetchFullDrama(id);
+    return bundle.extra;
   }
 
   void saveDrama(Drama drama) => db.upsertDrama(drama);
@@ -135,8 +179,10 @@ class DramaRepositoryImpl {
 
   void clearMetadataCache() {
     db.clearDetailCache();
+    api.clearMemoryCache();
     _searchMemoryCache.clear();
     _railMemoryCache.clear();
+    _extraMemoryCache.clear();
   }
 
   Shortcut? getShortcutForDrama(int dramaId) => db.getShortcutForDrama(dramaId);

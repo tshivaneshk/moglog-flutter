@@ -11,6 +11,40 @@ String normalizePosterUrl(String? raw) {
   return 'https://image.tmdb.org/t/p/w500/$s';
 }
 
+/// Rewrites TMDB image URLs to the smallest sharp size bucket for the target slot
+/// (`w185` for avatars/thumbnails, `w342` for grid cards, `w500` for hero banners).
+String optimizeTmdbImageUrl(
+  String? raw, {
+  double? targetWidthDp,
+  double dpr = 2.0,
+}) {
+  final normalized = normalizePosterUrl(raw);
+  if (normalized.isEmpty) return '';
+  if (targetWidthDp == null || !targetWidthDp.isFinite || targetWidthDp <= 0) {
+    return normalized;
+  }
+  const tmdbPrefix = 'https://image.tmdb.org/t/p/';
+  if (!normalized.startsWith(tmdbPrefix)) return normalized;
+  final rest = normalized.substring(tmdbPrefix.length);
+  final slashIdx = rest.indexOf('/');
+  if (slashIdx <= 0) return normalized;
+  final currentSize = rest.substring(0, slashIdx);
+  // Only downscale large poster/profile variants; leave small logos (w154/w92) untouched.
+  if (currentSize != 'w500' &&
+      currentSize != 'w780' &&
+      currentSize != 'original') {
+    return normalized;
+  }
+  final path = rest.substring(slashIdx);
+  final neededPx = (targetWidthDp * dpr.clamp(1.0, 3.0)).round();
+  final bucket = neededPx <= 200
+      ? 'w185'
+      : neededPx <= 380
+          ? 'w342'
+          : 'w500';
+  return '$tmdbPrefix$bucket$path';
+}
+
 /// Core TV show / drama domain model matching Kotlin `Drama` 1:1,
 /// including exact Gson JSON field names for Firestore & `.moglog` compatibility.
 class Drama {

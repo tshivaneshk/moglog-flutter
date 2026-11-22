@@ -287,6 +287,22 @@ void main() {
       expect(normalizePosterUrl(''), '');
     });
 
+    test('optimizeTmdbImageUrl selects w185/w342/w500 buckets by slot size', () {
+      const base = 'https://image.tmdb.org/t/p/w500/cast.jpg';
+      expect(
+        optimizeTmdbImageUrl(base, targetWidthDp: 64, dpr: 2.0),
+        'https://image.tmdb.org/t/p/w185/cast.jpg',
+      );
+      expect(
+        optimizeTmdbImageUrl(base, targetWidthDp: 130, dpr: 2.0),
+        'https://image.tmdb.org/t/p/w342/cast.jpg',
+      );
+      expect(
+        optimizeTmdbImageUrl(base, targetWidthDp: 360, dpr: 2.0),
+        'https://image.tmdb.org/t/p/w500/cast.jpg',
+      );
+    });
+
     test('TMDB credential validator blocks compromised legacy key and validates v3/v4', () {
       expect(
         SecureStore.isValidTmdbCredentialFormat('b30d871ab7f51c18054f0e6d0921da16'),

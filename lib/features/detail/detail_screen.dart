@@ -14,6 +14,7 @@ import '../../core/design_system/icons.dart';
 import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/network/image_cache_manager.dart';
 import '../../domain/logic/season_progress.dart';
 import '../../domain/model/drama.dart';
 import '../../domain/model/drama_extra_details.dart';
@@ -57,6 +58,11 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final ctrl = ref.read(dramaControllerProvider);
     final local = ref.read(dramaRepositoryProvider).getLocalDramaById(widget.dramaId);
     final immediate = local ?? ctrl.getImmediateDramaById(widget.dramaId);
+    final immediateExtra = ctrl.getImmediateExtraDetails(widget.dramaId);
+    if (immediateExtra != null) {
+      _extra = immediateExtra;
+      _prewarmDetailMedia(immediateExtra);
+    }
     if (immediate != null) {
       _drama = immediate;
       _isSaved = local != null && !local.isDeleted;
@@ -72,33 +78,70 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     _loadData();
   }
 
+  void _prewarmDetailMedia(DramaExtraDetails extra) {
+    final castUrls = extra.cast
+        .take(10)
+        .map((c) => c.profilePath ?? '')
+        .where((u) => u.isNotEmpty);
+    final recUrls = extra.recommendations
+        .take(8)
+        .map((r) => r.posterPath)
+        .where((u) => u.isNotEmpty);
+    if (castUrls.isNotEmpty) {
+      unawaited(
+        MoglogImageCacheManager.prewarmUrls(
+          castUrls,
+          targetWidthDp: 64,
+          maxConcurrent: 6,
+        ),
+      );
+    }
+    if (recUrls.isNotEmpty) {
+      unawaited(
+        MoglogImageCacheManager.prewarmUrls(
+          recUrls,
+          targetWidthDp: 108,
+          maxConcurrent: 6,
+        ),
+      );
+    }
+  }
+
   Future<void> _loadData() async {
     final ctrl = ref.read(dramaControllerProvider);
     final local = ref.read(dramaRepositoryProvider).getLocalDramaById(widget.dramaId);
-    final resolved = await ctrl.resolveDramaById(widget.dramaId);
-    if (!mounted) return;
-    if (resolved != null) {
-      final posterChanged = _drama?.posterPath != resolved.posterPath;
-      _drama = resolved;
-      _isSaved = local != null && !local.isDeleted;
-      final cachedTint = _posterTintCache[resolved.posterPath];
-      if (cachedTint != null &&
-          ref.read(currentSettingsProvider).dynamicPosterTint) {
-        _dynamicAccent = cachedTint;
-      }
-      setState(() => _loading = false);
-      if ((posterChanged || _dynamicAccent == null) &&
-          cachedTint == null &&
-          ref.read(currentSettingsProvider).dynamicPosterTint) {
-        unawaited(_extractPosterAccent(resolved.posterPath));
-      }
-    } else if (_drama == null) {
-      setState(() => _loading = false);
+
+    // If both drama summary and extra details are already hydrated from local cache, skip redundant fetch.
+    if (_drama != null &&
+        _extra != null &&
+        _drama!.overview.isNotEmpty &&
+        _drama!.posterPath.isNotEmpty) {
+      return;
     }
 
-    final extra = await ctrl.getDramaExtraDetails(widget.dramaId);
+    final bundle = await ctrl.fetchFullDrama(widget.dramaId);
     if (!mounted) return;
+
+    final resolved = bundle.drama ?? _drama;
+    final extra = bundle.extra ?? _extra;
+    final posterChanged =
+        resolved != null && _drama?.posterPath != resolved.posterPath;
+
+    if (extra != null) {
+      _prewarmDetailMedia(extra);
+    }
+
     setState(() {
+      _loading = false;
+      if (resolved != null) {
+        _drama = resolved;
+        _isSaved = local != null && !local.isDeleted;
+        final cachedTint = _posterTintCache[resolved.posterPath];
+        if (cachedTint != null &&
+            ref.read(currentSettingsProvider).dynamicPosterTint) {
+          _dynamicAccent = cachedTint;
+        }
+      }
       _extra = extra;
       if (_drama != null && extra != null) {
         _drama = _drama!.copyWith(
@@ -123,9 +166,16 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
         );
       }
     });
+
+    if (resolved != null &&
+        (posterChanged || _dynamicAccent == null) &&
+        _posterTintCache[resolved.posterPath] == null &&
+        ref.read(currentSettingsProvider).dynamicPosterTint) {
+      unawaited(_extractPosterAccent(resolved.posterPath));
+    }
   }
 
-  /// Fast native image-codec tint extraction shared with `PosterImage`'s cache.
+  /// Fast native image-codec tint extraction using w185 thumbnail via pooled cache.
   Future<void> _extractPosterAccent(String posterUrl) async {
     final trimmed = posterUrl.trim();
     if (trimmed.isEmpty) return;
@@ -135,9 +185,13 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
       return;
     }
 
+    final tintUrl = optimizeTmdbImageUrl(trimmed, targetWidthDp: 48, dpr: 2.0);
     final completer = Completer<ui.Image?>();
     final provider = ResizeImage(
-      CachedNetworkImageProvider(trimmed),
+      CachedNetworkImageProvider(
+        tintUrl,
+        cacheManager: MoglogImageCacheManager.instance,
+      ),
       width: 24,
     );
     final stream = provider.resolve(ImageConfiguration.empty);

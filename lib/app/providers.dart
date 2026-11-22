@@ -6,12 +6,12 @@ import 'dart:typed_data';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../core/background/background_scheduler.dart';
 import '../core/celebration/show_completion_celebration.dart';
+import '../core/network/image_cache_manager.dart';
 import '../core/notifications/notification_service.dart';
 import '../core/platform/platform_bridge.dart';
 import '../core/security/backup_crypto_envelope.dart';
@@ -382,6 +382,20 @@ class DramaController {
         airingToday: results[2],
         onTheAir: results[3],
       );
+      // Warm visible Discover rail posters in the background using pooled HTTP keep-alive
+      final heroPosters = <String>[
+        for (final list in results)
+          ...list.take(6).map((d) => d.posterPath).where((u) => u.isNotEmpty),
+      ];
+      if (heroPosters.isNotEmpty) {
+        unawaited(
+          MoglogImageCacheManager.prewarmUrls(
+            heroPosters,
+            targetWidthDp: 130,
+            maxConcurrent: 6,
+          ),
+        );
+      }
     } catch (e) {
       ref.read(discoverRailsProvider.notifier).state = current.copyWith(
         isLoading: false,
@@ -426,49 +440,69 @@ class DramaController {
     return _repo.getLocalDramaById(id) ?? _transientDramas[id];
   }
 
-  Future<Drama?> resolveDramaById(int id) async {
+  DramaExtraDetails? getImmediateExtraDetails(int id) {
+    return _repo.getDramaExtraDetailsImmediate(id);
+  }
+
+  /// Single-call detail resolver: populates both Drama summary and DramaExtraDetails
+  /// with at most one TMDB request (zero duplicate network calls).
+  Future<({Drama? drama, DramaExtraDetails? extra})> fetchFullDrama(int id) async {
     final local = _repo.getLocalDramaById(id);
-    if (local != null) return local;
     final cachedTransient = _transientDramas[id];
-    final remote = await _repo.getDramaDetails(id);
-    if (remote != null) {
-      _transientDramas[id] = remote;
-      return remote;
+    final hasKnownSummary = local != null ||
+        (cachedTransient != null &&
+            cachedTransient.posterPath.isNotEmpty &&
+            cachedTransient.overview.isNotEmpty);
+
+    final bundle = await _repo.fetchFullDrama(
+      id,
+      skipSummaryFetchIfCached: hasKnownSummary,
+    );
+
+    final extra = bundle.extra;
+    Drama? resolved = local ?? bundle.drama ?? cachedTransient;
+    if (bundle.drama != null) {
+      _transientDramas[id] = bundle.drama!;
     }
-    return cachedTransient;
+
+    if (local != null && extra != null) {
+      final updated = local.copyWith(
+        genres: local.genres.trim().isNotEmpty
+            ? local.genres
+            : extra.genres.join(', '),
+        releaseYear:
+            local.releaseYear > 0 ? local.releaseYear : extra.releaseYear,
+        totalSeasons:
+            local.totalSeasons > 0 ? local.totalSeasons : extra.totalSeasons,
+        totalEpisodes: local.totalEpisodes > 0
+            ? local.totalEpisodes
+            : extra.totalEpisodes,
+        nextEpisodeAirDate:
+            extra.nextEpisodeAirDate ?? local.nextEpisodeAirDate,
+        nextEpisodeNumber: extra.nextEpisodeNumber > 0
+            ? extra.nextEpisodeNumber
+            : local.nextEpisodeNumber,
+        nextSeasonNumber: extra.nextSeasonNumber > 0
+            ? extra.nextSeasonNumber
+            : local.nextSeasonNumber,
+      );
+      if (updated != local) {
+        _repo.saveDrama(updated);
+      }
+      resolved = updated;
+    }
+
+    return (drama: resolved, extra: extra);
+  }
+
+  Future<Drama?> resolveDramaById(int id) async {
+    final bundle = await fetchFullDrama(id);
+    return bundle.drama;
   }
 
   Future<DramaExtraDetails?> getDramaExtraDetails(int id) async {
-    final details = await _repo.getDramaExtraDetails(id);
-    if (details != null) {
-      final existing = _repo.getLocalDramaById(id);
-      if (existing != null) {
-        final updated = existing.copyWith(
-          genres: existing.genres.trim().isNotEmpty
-              ? existing.genres
-              : details.genres.join(', '),
-          releaseYear:
-              existing.releaseYear > 0 ? existing.releaseYear : details.releaseYear,
-          totalSeasons:
-              existing.totalSeasons > 0 ? existing.totalSeasons : details.totalSeasons,
-          totalEpisodes: existing.totalEpisodes > 0
-              ? existing.totalEpisodes
-              : details.totalEpisodes,
-          nextEpisodeAirDate:
-              details.nextEpisodeAirDate ?? existing.nextEpisodeAirDate,
-          nextEpisodeNumber: details.nextEpisodeNumber > 0
-              ? details.nextEpisodeNumber
-              : existing.nextEpisodeNumber,
-          nextSeasonNumber: details.nextSeasonNumber > 0
-              ? details.nextSeasonNumber
-              : existing.nextSeasonNumber,
-        );
-        if (updated != existing) {
-          _repo.saveDrama(updated);
-        }
-      }
-    }
-    return details;
+    final bundle = await fetchFullDrama(id);
+    return bundle.extra;
   }
 
   void saveDrama(Drama drama) {
@@ -958,28 +992,13 @@ class DramaController {
     List<String> urls, {
     void Function(String stage, int done, int total)? onProgress,
   }) async {
-    var done = 0;
     onProgress?.call('Loading show posters…', 0, urls.length);
-    await _runInPool<String>(
+    await MoglogImageCacheManager.prewarmUrls(
       urls,
-      concurrency: 6,
-      task: (url) async {
-        for (var attempt = 0; attempt < 2; attempt++) {
-          try {
-            final cache = DefaultCacheManager();
-            final existing = await cache.getFileFromCache(url);
-            if (existing != null && await existing.file.exists()) break;
-            await cache.downloadFile(url).timeout(const Duration(seconds: 8));
-            break;
-          } catch (_) {
-            if (attempt == 0) {
-              await Future<void>.delayed(const Duration(milliseconds: 250));
-            }
-          }
-        }
-        done++;
-        onProgress?.call('Loading show posters…', done, urls.length);
-      },
+      targetWidthDp: 140,
+      maxConcurrent: 8,
+      onProgress: (done, total) =>
+          onProgress?.call('Loading show posters…', done, total),
     );
   }
 

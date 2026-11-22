@@ -105,6 +105,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
+  // Keep decoded posters & cast avatars hot in RAM for 120Hz scrolling
+  PaintingBinding.instance.imageCache.maximumSize = 400;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 150 << 20;
+
   try {
     await Firebase.initializeApp();
     await FirebaseAppCheck.instance.activate(

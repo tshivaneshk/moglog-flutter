@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/model/drama.dart';
+import '../network/image_cache_manager.dart';
 import 'icons.dart';
 import 'motion_haptics.dart';
 import 'shapes.dart';
@@ -16,30 +17,35 @@ class IosFrostedBar extends StatelessWidget {
   final Widget child;
   final bool showTopBorder;
   final bool showBottomBorder;
+  final Color? backgroundColor;
 
   const IosFrostedBar({
     super.key,
     required this.child,
     this.showTopBorder = false,
     this.showBottomBorder = false,
+    this.backgroundColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: c.frostedBarSurface,
-        border: Border(
-          top: showTopBorder
-              ? BorderSide(color: c.separator, width: c.hairlineWidth)
-              : BorderSide.none,
-          bottom: showBottomBorder
-              ? BorderSide(color: c.separator, width: c.hairlineWidth)
-              : BorderSide.none,
+    return SizedBox(
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: backgroundColor ?? c.frostedBarSurface,
+          border: Border(
+            top: showTopBorder
+                ? BorderSide(color: c.separator, width: c.hairlineWidth)
+                : BorderSide.none,
+            bottom: showBottomBorder
+                ? BorderSide(color: c.separator, width: c.hairlineWidth)
+                : BorderSide.none,
+          ),
         ),
+        child: child,
       ),
-      child: child,
     );
   }
 }
@@ -86,7 +92,8 @@ class IosLargeTitleHeader extends StatelessWidget {
                     : 8.0;
 
     return IosFrostedBar(
-      showBottomBorder: effectiveCollapsed || bottomContent != null,
+      showBottomBorder: effectiveCollapsed,
+      backgroundColor: effectiveCollapsed ? c.frostedBarSurface : c.background,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -1284,26 +1291,53 @@ class _PosterImageState extends State<PosterImage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.width != null && widget.width!.isFinite) {
+      return _buildWithWidth(context, widget.width);
+    }
+    if (widget.isCircular) {
+      return _buildWithWidth(context, widget.height ?? 64);
+    }
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final measuredW =
+            constraints.hasBoundedWidth && constraints.maxWidth > 0
+                ? constraints.maxWidth
+                : null;
+        return _buildWithWidth(ctx, measuredW);
+      },
+    );
+  }
+
+  Widget _buildWithWidth(BuildContext context, double? effectiveWidth) {
     final c = context.colors;
     final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
-    final cacheW = widget.width != null && widget.width!.isFinite
-        ? (widget.width! * dpr).round().clamp(96, 720)
+    final cacheW = effectiveWidth != null
+        ? (effectiveWidth * dpr).round().clamp(96, 680)
         : 540;
-    final normalizedUrl = normalizePosterUrl(widget.url);
+    final optimizedUrl = optimizeTmdbImageUrl(
+      widget.url,
+      targetWidthDp: effectiveWidth,
+      dpr: dpr,
+    );
 
     final placeholder = Container(
       width: widget.width,
       height: widget.height,
       color: c.tertiaryBackground,
       alignment: Alignment.center,
-      child: Icon(MoglogIcons.library, size: 22, color: c.tertiaryLabel),
+      child: Icon(
+        widget.isCircular ? MoglogIcons.person : MoglogIcons.library,
+        size: widget.isCircular ? 24 : 22,
+        color: c.tertiaryLabel,
+      ),
     );
 
-    final Widget imageWidget = normalizedUrl.isEmpty
+    final Widget imageWidget = optimizedUrl.isEmpty
         ? placeholder
         : CachedNetworkImage(
-            key: ValueKey('${normalizedUrl}_r$_retryCount'),
-            imageUrl: normalizedUrl,
+            key: ValueKey('${optimizedUrl}_r$_retryCount'),
+            cacheManager: MoglogImageCacheManager.instance,
+            imageUrl: optimizedUrl,
             width: widget.width,
             height: widget.height,
             fit: widget.fit,
@@ -1311,7 +1345,9 @@ class _PosterImageState extends State<PosterImage> {
                 ? widget.alignment as Alignment
                 : Alignment.center,
             memCacheWidth: cacheW,
-            fadeInDuration: const Duration(milliseconds: 120),
+            maxWidthDiskCache: cacheW,
+            fadeInDuration: const Duration(milliseconds: 90),
+            fadeOutDuration: const Duration(milliseconds: 60),
             placeholder: (_, __) => Container(
               width: widget.width,
               height: widget.height,

@@ -74,7 +74,7 @@ class _AdvancedSettingsScreenState
         ),
         ActionSheetItem(
           label: 'CSV Spreadsheet (.csv)',
-          icon: MoglogIcons.download,
+          icon: MoglogIcons.upload,
           onTap: () => _performExport(passphrase: null),
         ),
       ],
@@ -276,7 +276,7 @@ class _AdvancedSettingsScreenState
       actions: [
         ActionSheetItem(
           label: 'Select .moglog or .csv File',
-          icon: MoglogIcons.upload,
+          icon: MoglogIcons.download,
           onTap: _pickAndImportFile,
         ),
       ],
@@ -707,7 +707,7 @@ class _AdvancedSettingsScreenState
                     IosGroupedRow(
                       title: 'Export Library Backup',
                       subtitle: 'Encrypted .moglog or CSV file',
-                      icon: MoglogIcons.download,
+                      icon: MoglogIcons.upload,
                       iconBackground: c.accent,
                       showChevron: true,
                       onTap: _showExportModeSheet,
@@ -715,7 +715,7 @@ class _AdvancedSettingsScreenState
                     IosGroupedRow(
                       title: 'Import Library Backup',
                       subtitle: '.moglog, CSV, TV Time & Trakt',
-                      icon: MoglogIcons.upload,
+                      icon: MoglogIcons.download,
                       iconBackground: c.statusPlanned,
                       showChevron: true,
                       onTap: _showImportModeSheet,
