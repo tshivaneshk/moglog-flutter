@@ -60,17 +60,37 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   }
 
   void _quickAddToPlanned(Drama drama) {
+    MoglogHaptics.mediumImpact();
     final ctrl = ref.read(dramaControllerProvider);
+    final existing = ref.read(dramaRepositoryProvider).getLocalDramaById(drama.id);
     ctrl.saveDrama(drama.copyWith(status: 'Planned', isDeleted: false));
-    ref
-        .read(toastProvider.notifier)
-        .show('Added "${drama.title}" to Planned');
+    ref.read(toastProvider.notifier).show(
+          'Added "${drama.title}" to Planned',
+          actionLabel: 'Undo',
+          onAction: () {
+            if (existing != null) {
+              ctrl.saveDrama(existing);
+            } else {
+              ctrl.deleteDramaPermanently(drama);
+            }
+          },
+        );
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
+    final screenW = MediaQuery.sizeOf(context).width;
+    final searchCols = screenW >= 840
+        ? 6
+        : screenW >= 600
+            ? 5
+            : screenW >= 460
+                ? 4
+                : screenW < 310
+                    ? 2
+                    : 3;
     final hasKey = ref.watch(hasApiKeyProvider);
     final rails = ref.watch(discoverRailsProvider);
     final searchState = ref.watch(discoverSearchProvider);
@@ -123,83 +143,97 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                       ),
                     ),
                   )
-                : ListView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.only(bottom: 104),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                        child: IosSearchBar(
-                          controller: _searchController,
-                          placeholder: 'Shows, anime, dramas…',
-                          onChanged: (q) {
-                            ref
-                                .read(dramaControllerProvider)
-                                .updateSearchQuery(q);
-                            setState(() {});
-                          },
-                        ),
+                : RefreshIndicator(
+                    color: c.accent,
+                    backgroundColor: c.secondaryBackground,
+                    onRefresh: () async {
+                      MoglogHaptics.lightImpact();
+                      await ref
+                          .read(dramaControllerProvider)
+                          .loadDiscoverRails(forceRefresh: true);
+                    },
+                    child: ListView(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
                       ),
-                      if (searchState.query.trim().isNotEmpty) ...[
-                        if (searchState.isLoading)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: 6,
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
-                                mainAxisSpacing: 12,
-                                crossAxisSpacing: 10,
-                                childAspectRatio: 0.62,
-                              ),
-                              itemBuilder: (_, __) => const ShimmerBox(),
-                            ),
-                          )
-                        else if (searchState.results.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 48),
-                            child: IosEmptyState(
-                              icon: MoglogIcons.search,
-                              title: 'No Results',
-                              subtitle:
-                                  'No shows found for "${searchState.query.trim()}"',
-                            ),
-                          )
-                        else
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: searchState.results.length,
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
-                                mainAxisSpacing: 14,
-                                crossAxisSpacing: 10,
-                                childAspectRatio: 0.56,
-                              ),
-                              itemBuilder: (_, i) {
-                                final d = searchState.results[i];
-                                final isSaved = savedIds.contains(d.id);
-                                return _DiscoverPosterTile(
-                                  drama: d,
-                                  isSaved: isSaved,
-                                  onTap: () {
-                                    ref
-                                        .read(dramaControllerProvider)
-                                        .cacheTransientDrama(d);
-                                    widget.onDramaTap(d.id);
-                                  },
-                                  onQuickAdd: () => _quickAddToPlanned(d),
-                                );
-                              },
-                            ),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.only(bottom: 104),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                          child: IosSearchBar(
+                            controller: _searchController,
+                            placeholder: 'Shows, anime, dramas…',
+                            onChanged: (q) {
+                              ref
+                                  .read(dramaControllerProvider)
+                                  .updateSearchQuery(q);
+                              setState(() {});
+                            },
                           ),
-                      ] else ...[
+                        ),
+                        if (searchState.query.trim().isNotEmpty) ...[
+                          if (searchState.isLoading)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: searchCols * 2,
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: searchCols,
+                                  mainAxisSpacing: 12,
+                                  crossAxisSpacing: 10,
+                                  childAspectRatio: 0.62,
+                                ),
+                                itemBuilder: (_, __) => const ShimmerBox(),
+                              ),
+                            )
+                          else if (searchState.results.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 48),
+                              child: IosEmptyState(
+                                icon: MoglogIcons.search,
+                                title: 'No Results',
+                                subtitle:
+                                    'No shows found for "${searchState.query.trim()}"',
+                              ),
+                            )
+                          else
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: searchState.results.length,
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: searchCols,
+                                  mainAxisSpacing: 14,
+                                  crossAxisSpacing: 10,
+                                  childAspectRatio: 0.56,
+                                ),
+                                itemBuilder: (_, i) {
+                                  final d = searchState.results[i];
+                                  final isSaved = savedIds.contains(d.id);
+                                  return _DiscoverPosterTile(
+                                    drama: d,
+                                    isSaved: isSaved,
+                                    onTap: () {
+                                      ref
+                                          .read(dramaControllerProvider)
+                                          .cacheTransientDrama(d);
+                                      widget.onDramaTap(d.id);
+                                    },
+                                    onQuickAdd: () => _quickAddToPlanned(d),
+                                  );
+                                },
+                              ),
+                            ),
+                        ] else ...[
                         // Watch Circle & Blend Promo / Status Banner
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
@@ -350,6 +384,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                       ],
                     ],
                   ),
+                ),
           ),
         ],
       ),

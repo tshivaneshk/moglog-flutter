@@ -13,6 +13,10 @@ class MoglogHaptics {
 
   static Future<void> selectionChanged() => HapticFeedback.selectionClick();
 
+  static Future<void> lightImpact() => HapticFeedback.lightImpact();
+
+  static Future<void> mediumImpact() => HapticFeedback.mediumImpact();
+
   static Future<void> longPress() => HapticFeedback.heavyImpact();
 
   static Future<void> success() =>

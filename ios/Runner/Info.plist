@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Moglog Flutter</string>
+	<string>Moglog</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,13 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>moglog_flutter</string>
+	<string>Moglog</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Moglog uses Face ID to unlock your encrypted library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Moglog lets you choose a custom profile photo from your library.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Moglog lets you capture a custom profile photo.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

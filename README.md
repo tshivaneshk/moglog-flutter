@@ -1,5 +1,8 @@
 # Moglog
 
+[![Dart CI](https://github.com/tshivaneshk/moglog-flutter/actions/workflows/dart.yml/badge.svg)](https://github.com/tshivaneshk/moglog-flutter/actions/workflows/dart.yml)
+[![Swift CI](https://github.com/tshivaneshk/moglog-flutter/actions/workflows/swift.yml/badge.svg)](https://github.com/tshivaneshk/moglog-flutter/actions/workflows/swift.yml)
+[![Xcode Build & Analyze](https://github.com/tshivaneshk/moglog-flutter/actions/workflows/xcode.yml/badge.svg)](https://github.com/tshivaneshk/moglog-flutter/actions/workflows/xcode.yml)
 [![Release](https://img.shields.io/github/v/release/tshivaneshk/Moglog-Releases?label=Release&color=10B981)](https://github.com/tshivaneshk/Moglog-Releases/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docs & Guide](https://img.shields.io/badge/Docs-moglog--instructions.vercel.app-1C1C1E)](https://moglog-instructions.vercel.app)

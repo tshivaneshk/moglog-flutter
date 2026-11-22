@@ -85,40 +85,68 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   void _showNewShelfDialog() {
     final ctrl = TextEditingController();
-    final c = context.colors;
-    showDialog<void>(
+    showIosBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: c.secondaryBackground,
-        title: Text('New Collection Shelf', style: context.typo.headline.copyWith(color: c.label)),
-        content: TextField(
-          controller: ctrl,
-          maxLength: 28,
-          autofocus: true,
-          style: context.typo.body.copyWith(color: c.label),
-          decoration: InputDecoration(
-            hintText: 'e.g. Comfort Rewatch',
-            hintStyle: context.typo.subhead.copyWith(color: c.tertiaryLabel),
+      disposeAfter: [ctrl],
+      builder: (ctx) {
+        final c = ctx.colors;
+        final t = ctx.typo;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'New Collection Shelf',
+                style: t.title3.copyWith(color: c.label),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Group favorite dramas or themed watchlists into a custom shelf.',
+                style: t.caption.copyWith(color: c.secondaryLabel),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: c.tertiaryBackground,
+                  borderRadius: MoglogShapes.control,
+                  border: Border.all(color: c.separator, width: 0.8),
+                ),
+                child: TextField(
+                  controller: ctrl,
+                  maxLength: 28,
+                  autofocus: true,
+                  style: t.body.copyWith(color: c.label),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    counterText: '',
+                    hintText: 'e.g. Comfort Rewatch',
+                    hintStyle: t.subhead.copyWith(color: c.tertiaryLabel),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              IosPrimaryButton(
+                text: 'Create Shelf',
+                onTap: () async {
+                  final name = ctrl.text.trim();
+                  Navigator.of(ctx).pop();
+                  if (name.isNotEmpty) {
+                    await ref
+                        .read(dramaControllerProvider)
+                        .addCustomCollection(name);
+                    ref
+                        .read(toastProvider.notifier)
+                        .show('Created shelf "$name"');
+                  }
+                },
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel', style: TextStyle(color: c.secondaryLabel)),
-          ),
-          TextButton(
-            onPressed: () async {
-              final name = ctrl.text.trim();
-              Navigator.of(ctx).pop();
-              if (name.isNotEmpty) {
-                await ref.read(dramaControllerProvider).addCustomCollection(name);
-                ref.read(toastProvider.notifier).show('Created shelf "$name"');
-              }
-            },
-            child: Text('Create', style: TextStyle(color: c.accent, fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -145,71 +173,87 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   void _showRenameShelfDialog(String oldName) {
     final ctrl = TextEditingController(text: oldName);
-    final c = context.colors;
-    showDialog<void>(
+    showIosBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: c.secondaryBackground,
-        title: Text('Rename Shelf', style: context.typo.headline.copyWith(color: c.label)),
-        content: TextField(
-          controller: ctrl,
-          maxLength: 28,
-          autofocus: true,
-          style: context.typo.body.copyWith(color: c.label),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel', style: TextStyle(color: c.secondaryLabel)),
+      disposeAfter: [ctrl],
+      builder: (ctx) {
+        final c = ctx.colors;
+        final t = ctx.typo;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Rename Shelf', style: t.title3.copyWith(color: c.label)),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: c.tertiaryBackground,
+                  borderRadius: MoglogShapes.control,
+                  border: Border.all(color: c.separator, width: 0.8),
+                ),
+                child: TextField(
+                  controller: ctrl,
+                  maxLength: 28,
+                  autofocus: true,
+                  style: t.body.copyWith(color: c.label),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    counterText: '',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              IosPrimaryButton(
+                text: 'Save Changes',
+                onTap: () async {
+                  final newName = ctrl.text.trim();
+                  Navigator.of(ctx).pop();
+                  if (newName.isNotEmpty && newName != oldName) {
+                    await ref
+                        .read(dramaControllerProvider)
+                        .renameShelf(oldName, newName);
+                    if (ref.read(librarySelectedShelfProvider) == oldName) {
+                      ref.read(librarySelectedShelfProvider.notifier).state =
+                          newName;
+                    }
+                    ref
+                        .read(toastProvider.notifier)
+                        .show('Renamed to "$newName"');
+                  }
+                },
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () async {
-              final newName = ctrl.text.trim();
-              Navigator.of(ctx).pop();
-              if (newName.isNotEmpty && newName != oldName) {
-                await ref.read(dramaControllerProvider).renameShelf(oldName, newName);
-                if (ref.read(librarySelectedShelfProvider) == oldName) {
-                  ref.read(librarySelectedShelfProvider.notifier).state = newName;
-                }
-                ref.read(toastProvider.notifier).show('Renamed to "$newName"');
-              }
-            },
-            child: Text('Save', style: TextStyle(color: c.accent, fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   void _showDeleteShelfDialog(String shelfName) {
-    final c = context.colors;
-    showDialog<void>(
+    showIosActionSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: c.secondaryBackground,
-        title: Text('Delete "$shelfName"?', style: context.typo.headline.copyWith(color: c.label)),
-        content: Text(
+      title: 'Delete "$shelfName"?',
+      message:
           'Shows in this shelf remain in your library; only the shelf tag is removed.',
-          style: context.typo.subhead.copyWith(color: c.secondaryLabel),
+      actions: [
+        ActionSheetItem(
+          label: 'Delete Shelf',
+          icon: MoglogIcons.trash,
+          isDestructive: true,
+          onTap: () async {
+            await ref.read(dramaControllerProvider).deleteShelf(shelfName);
+            if (ref.read(librarySelectedShelfProvider) == shelfName) {
+              ref.read(librarySelectedShelfProvider.notifier).state = null;
+            }
+            ref
+                .read(toastProvider.notifier)
+                .show('Deleted shelf "$shelfName"');
+          },
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel', style: TextStyle(color: c.secondaryLabel)),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await ref.read(dramaControllerProvider).deleteShelf(shelfName);
-              if (ref.read(librarySelectedShelfProvider) == shelfName) {
-                ref.read(librarySelectedShelfProvider.notifier).state = null;
-              }
-              ref.read(toastProvider.notifier).show('Deleted shelf "$shelfName"');
-            },
-            child: Text('Delete', style: TextStyle(color: c.destructive, fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -564,9 +608,23 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                       ),
                     ),
                   )
-                : CustomScrollView(
-                    controller: _scrollController,
-                    slivers: [
+                : RefreshIndicator(
+                    color: c.accent,
+                    backgroundColor: c.secondaryBackground,
+                    onRefresh: () async {
+                      MoglogHaptics.lightImpact();
+                      await ref
+                          .read(dramaControllerProvider)
+                          .reconcileCloudAndLocal();
+                    },
+                    child: CustomScrollView(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      slivers: [
                       // Continue Watching Rail
                       if (showContinueWatching)
                         SliverToBoxAdapter(
@@ -717,7 +775,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                             },
                           ),
                         ),
-                    ],
+                      ],
+                    ),
                   ),
           ),
         ],
@@ -754,7 +813,9 @@ class _ShelfChip extends StatelessWidget {
       onLongPress: onLongPress,
       hapticOnTap: true,
       pressedScale: 0.95,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: selected
