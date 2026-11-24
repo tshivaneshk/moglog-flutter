@@ -1115,6 +1115,7 @@ class AuthController extends StateNotifier<AuthUiState> {
   final Ref ref;
   StreamSubscription<User?>? _authSub;
   int _lastCircleRefreshMs = 0;
+  bool _pendingNewFirebaseUser = false;
 
   AuthController(this.ref) : super(const AuthUiState()) {
     if (Firebase.apps.isNotEmpty) {
@@ -1143,7 +1144,7 @@ class AuthController extends StateNotifier<AuthUiState> {
         ref.read(dramaControllerProvider).ensureRealtimeListenerStarted();
         if (user != null) {
           Future<void>.delayed(const Duration(milliseconds: 350), () {
-            if (!mounted) return;
+            if (!mounted || state.pendingCreateAccountPrompt) return;
             ref.read(watchCircleRepositoryProvider).startListeningForCircleMembers(
               onMemberChanged: () {
                 unawaited(refreshWatchCircle(forceRefresh: true));
@@ -1195,9 +1196,11 @@ class AuthController extends StateNotifier<AuthUiState> {
 
       final exists = await _cloud.checkAccountExists(user.uid);
       if (!exists) {
+        _pendingNewFirebaseUser = userCred.additionalUserInfo?.isNewUser ?? false;
         state = state.copyWith(user: user, pendingCreateAccountPrompt: true);
       } else {
-        state = state.copyWith(user: user);
+        _pendingNewFirebaseUser = false;
+        state = state.copyWith(user: user, pendingCreateAccountPrompt: false);
         unawaited(fetchFromCloud().catchError((_) => null));
         unawaited(refreshWatchCircle());
       }
@@ -1208,13 +1211,30 @@ class AuthController extends StateNotifier<AuthUiState> {
   }
 
   Future<void> confirmCreateCloudAccount() async {
+    _pendingNewFirebaseUser = false;
     state = state.copyWith(pendingCreateAccountPrompt: false);
+    final user = state.user;
+    if (user != null) {
+      _circle.startListeningForCircleMembers(
+        onMemberChanged: () {
+          unawaited(refreshWatchCircle(forceRefresh: true));
+        },
+      );
+    }
     await syncToCloud();
-    await refreshWatchCircle();
+    await refreshWatchCircle(forceRefresh: true);
   }
 
   Future<void> cancelCreateCloudAccount() async {
+    final user = state.user;
+    final shouldDeleteAuthUser = _pendingNewFirebaseUser;
+    _pendingNewFirebaseUser = false;
     state = state.copyWith(pendingCreateAccountPrompt: false);
+    if (shouldDeleteAuthUser && user != null) {
+      try {
+        await user.delete();
+      } catch (_) {}
+    }
     await signOut();
   }
 

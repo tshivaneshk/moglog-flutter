@@ -90,18 +90,29 @@ class _MoglogAppState extends ConsumerState<MoglogApp> {
       _createAccountDialogShown = true;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         final navCtx = router.routerDelegate.navigatorKey.currentContext;
-        if (navCtx == null) return;
+        if (navCtx == null) {
+          _createAccountDialogShown = false;
+          return;
+        }
+        final accountEmail = authState.user?.email;
+        final accountLabel = (accountEmail != null && accountEmail.isNotEmpty)
+            ? accountEmail
+            : 'this Google account';
+        var confirmed = false;
         await showIosActionSheet(
           context: navCtx,
-          title: 'Initialize Cloud Backup?',
+          title: 'Create Moglog Account?',
           message:
-              'No Moglog cloud backup exists for this Google account yet. Create one now to sync your library?',
+              'No Moglog account exists for $accountLabel yet. Create one now to sync your library?',
           actions: [
             ActionSheetItem(
-              label: 'Create Cloud Backup',
-              onTap: () => ref
-                  .read(authControllerProvider.notifier)
-                  .confirmCreateCloudAccount(),
+              label: 'Create Moglog Account',
+              onTap: () {
+                confirmed = true;
+                ref
+                    .read(authControllerProvider.notifier)
+                    .confirmCreateCloudAccount();
+              },
             ),
             ActionSheetItem(
               label: 'Cancel & Sign Out',
@@ -112,6 +123,12 @@ class _MoglogAppState extends ConsumerState<MoglogApp> {
             ),
           ],
         );
+        if (!confirmed &&
+            ref.read(authControllerProvider).pendingCreateAccountPrompt) {
+          await ref
+              .read(authControllerProvider.notifier)
+              .cancelCreateCloudAccount();
+        }
         _createAccountDialogShown = false;
       });
     }
