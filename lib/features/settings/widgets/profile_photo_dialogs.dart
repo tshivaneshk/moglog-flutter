@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
 import '../../../core/design_system/components.dart';
 import '../../../core/design_system/icons.dart';
 import '../../../core/design_system/theme.dart';
+import '../../../core/network/image_cache_manager.dart';
 
 /// Full-screen WhatsApp-style circular pan/pinch-to-zoom cropper (1x..4.5x)
 /// exporting 512x512 JPEG (quality 85) as Base64 matching Kotlin `ProfilePhotoDialogs.kt`.
@@ -174,7 +176,10 @@ Future<void> showProfilePhotoViewerDialog({
       imgProvider = MemoryImage(base64Decode(photoBase64));
     } catch (_) {}
   } else if (photoUrl.trim().isNotEmpty) {
-    imgProvider = NetworkImage(photoUrl);
+    imgProvider = CachedNetworkImageProvider(
+      photoUrl,
+      cacheManager: MoglogImageCacheManager.instance,
+    );
   }
 
   return showDialog<void>(

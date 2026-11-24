@@ -62,7 +62,13 @@ class AboutScreen extends StatefulWidget {
 }
 
 class _AboutScreenState extends State<AboutScreen> {
-  String _versionName = '3.1.0';
+  static const int _aboutCacheTtlMs = 30 * 60 * 1000; // 30 minutes
+  static _UpdateCheckState? _cachedUpdateState;
+  static int _cachedUpdateAtMs = 0;
+  static int? _cachedTotalDownloads;
+  static int _cachedDownloadsAtMs = 0;
+
+  String _versionName = '3.1.1';
   _UpdateCheckState _updateState = const _UpdateIdle();
   int? _totalDownloads;
 
@@ -93,12 +99,21 @@ class _AboutScreenState extends State<AboutScreen> {
         setState(() => _versionName = info.version);
       }
     } catch (_) {}
-    _checkUpdate();
-    _fetchDownloadStats();
+    _checkUpdate(forceRefresh: false);
+    _fetchDownloadStats(forceRefresh: false);
   }
 
-  Future<void> _checkUpdate() async {
+  Future<void> _checkUpdate({bool forceRefresh = false}) async {
     if (_updateState is _UpdateChecking) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (!forceRefresh &&
+        _cachedUpdateState != null &&
+        (now - _cachedUpdateAtMs) < _aboutCacheTtlMs) {
+      if (mounted) {
+        setState(() => _updateState = _cachedUpdateState!);
+      }
+      return;
+    }
     setState(() => _updateState = const _UpdateChecking());
     try {
       final res = await _dio.get<Map<String, dynamic>>(
@@ -143,19 +158,21 @@ class _AboutScreenState extends State<AboutScreen> {
       }
 
       if (!mounted) return;
+      final _UpdateCheckState nextState;
       if (isNewerVersion(current: _versionName, latest: tagName)) {
-        setState(
-          () => _updateState = _UpdateAvailable(
-            latestVersion: tagName,
-            releaseTitle: releaseTitle,
-            releaseNotes: releaseNotes,
-            downloadUrl: downloadUrl,
-            releasePageUrl: releasePageUrl,
-          ),
+        nextState = _UpdateAvailable(
+          latestVersion: tagName,
+          releaseTitle: releaseTitle,
+          releaseNotes: releaseNotes,
+          downloadUrl: downloadUrl,
+          releasePageUrl: releasePageUrl,
         );
       } else {
-        setState(() => _updateState = _UpdateUpToDate(_versionName));
+        nextState = _UpdateUpToDate(_versionName);
       }
+      _cachedUpdateState = nextState;
+      _cachedUpdateAtMs = DateTime.now().millisecondsSinceEpoch;
+      setState(() => _updateState = nextState);
     } catch (e) {
       if (mounted) {
         setState(() => _updateState = _UpdateError(e.toString()));
@@ -163,7 +180,16 @@ class _AboutScreenState extends State<AboutScreen> {
     }
   }
 
-  Future<void> _fetchDownloadStats() async {
+  Future<void> _fetchDownloadStats({bool forceRefresh = false}) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (!forceRefresh &&
+        _cachedTotalDownloads != null &&
+        (now - _cachedDownloadsAtMs) < _aboutCacheTtlMs) {
+      if (mounted) {
+        setState(() => _totalDownloads = _cachedTotalDownloads);
+      }
+      return;
+    }
     int? count;
     try {
       final res = await _dio.get<Map<String, dynamic>>(
@@ -197,8 +223,12 @@ class _AboutScreenState extends State<AboutScreen> {
       } catch (_) {}
     }
 
-    if (mounted && count != null) {
-      setState(() => _totalDownloads = count);
+    if (count != null) {
+      _cachedTotalDownloads = count;
+      _cachedDownloadsAtMs = DateTime.now().millisecondsSinceEpoch;
+      if (mounted) {
+        setState(() => _totalDownloads = count);
+      }
     }
   }
 
@@ -400,7 +430,7 @@ class _AboutScreenState extends State<AboutScreen> {
                             ),
                           ),
                       },
-                      onTap: _checkUpdate,
+                      onTap: () => _checkUpdate(forceRefresh: true),
                     ),
                     if (_updateState case final _UpdateAvailable avail)
                       Container(

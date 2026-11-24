@@ -136,7 +136,7 @@ class ContinueWatchingSection extends StatelessWidget {
                                       borderRadius: BorderRadius.circular(5),
                                     ),
                                     child: Text(
-                                      'UP NEXT · $upNextTag',
+                                      upNextTag,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: t.caption2.copyWith(

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -5,6 +6,7 @@ import '../../../core/design_system/icons.dart';
 import '../../../core/design_system/motion_haptics.dart';
 import '../../../core/design_system/shapes.dart';
 import '../../../core/design_system/theme.dart';
+import '../../../core/network/image_cache_manager.dart';
 import '../../../domain/model/drama_extra_details.dart';
 
 /// Native Personal Rating (0-10 in 0.5 increments) and Audience / Google Reviews card.
@@ -124,6 +126,41 @@ class _RatingAndNotesCardState extends State<RatingAndNotesCard> {
                   },
                 ),
               ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  for (final preset in const [6.0, 7.0, 8.0, 9.0, 10.0])
+                    IosPressable(
+                      onTap: () {
+                        MoglogHaptics.selectionChanged();
+                        widget.onRatingChanged(preset);
+                      },
+                      pressedScale: 0.93,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: (widget.myRating - preset).abs() < 0.01
+                              ? widget.accentColor
+                              : c.tertiaryBackground,
+                          borderRadius: MoglogShapes.pill,
+                        ),
+                        child: Text(
+                          '★ ${preset.toInt()}',
+                          style: t.caption2.copyWith(
+                            color: (widget.myRating - preset).abs() < 0.01
+                                ? Colors.black
+                                : c.secondaryLabel,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -193,59 +230,11 @@ class _RatingAndNotesCardState extends State<RatingAndNotesCard> {
               ),
               const SizedBox(height: 14),
               if (widget.reviews.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: c.tertiaryBackground,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        'No community reviews found on TMDB yet.',
-                        style: t.subhead.copyWith(color: c.secondaryLabel),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Check Google Reviews to read viewer opinions & critic ratings.',
-                        style: t.footnote.copyWith(color: c.tertiaryLabel),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                      IosPressable(
-                        onTap: _openGoogleReviews,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: widget.accentColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                MoglogIcons.search,
-                                size: 14,
-                                color: Colors.black,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Search Google Reviews',
-                                style: t.callout.copyWith(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    'No community reviews on TMDB yet · Tap Google Reviews above for critic & viewer ratings.',
+                    style: t.footnote.copyWith(color: c.secondaryLabel),
                   ),
                 )
               else
@@ -321,7 +310,10 @@ class _ReviewTile extends StatelessWidget {
                         radius: 16,
                         backgroundColor: accentColor.withValues(alpha: 0.2),
                         backgroundImage: (review.avatarUrl ?? '').isNotEmpty
-                            ? NetworkImage(review.avatarUrl!)
+                            ? CachedNetworkImageProvider(
+                                review.avatarUrl!,
+                                cacheManager: MoglogImageCacheManager.instance,
+                              )
                             : null,
                         child: (review.avatarUrl ?? '').isEmpty
                             ? Text(

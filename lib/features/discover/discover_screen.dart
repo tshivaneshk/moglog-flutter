@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,6 +10,7 @@ import '../../core/design_system/icons.dart';
 import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/network/image_cache_manager.dart';
 import '../../domain/model/drama.dart';
 
 class DiscoverScreen extends ConsumerStatefulWidget {
@@ -28,9 +30,34 @@ class DiscoverScreen extends ConsumerStatefulWidget {
 }
 
 class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
+  static const List<String> _genreFilters = [
+    'All Genres',
+    'Drama',
+    'Sci-Fi & Fantasy',
+    'Action & Adventure',
+    'Comedy',
+    'Crime',
+    'Mystery',
+    'Animation',
+    'Romance',
+  ];
+
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   bool _headerCollapsed = false;
+  String _selectedGenre = 'All Genres';
+
+  List<Drama> _filterByGenre(List<Drama> items) {
+    if (_selectedGenre == 'All Genres') return items;
+    final needle = _selectedGenre.toLowerCase();
+    return items
+        .where(
+          (d) =>
+              d.genres.toLowerCase().contains(needle) ||
+              d.genreList.any((g) => g.toLowerCase().contains(needle)),
+        )
+        .toList();
+  }
 
   @override
   void initState() {
@@ -118,14 +145,6 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                 showBadgeDot: authState.circleNudges.isNotEmpty,
                 onTap: widget.onNavigateToWatchCircle,
               ),
-              if (hasKey)
-                IosCircleIconButton(
-                  icon: MoglogIcons.refresh,
-                  tooltip: 'Refresh Discover',
-                  onTap: () => ref
-                      .read(dramaControllerProvider)
-                      .loadDiscoverRails(forceRefresh: true),
-                ),
             ],
           ),
           Expanded(
@@ -245,74 +264,142 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                           ),
                         ),
 
-                        // Recent Searches (up to 5 shown)
+                        // Recent Searches (compact single-row horizontal strip)
                         if (settings.recentSearches.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Recent Searches',
-                                      style: t.headline.copyWith(color: c.label),
-                                    ),
-                                    IosPressable(
-                                      onTap: () => ref
-                                          .read(settingsStoreProvider)
-                                          .clearRecentSearches(),
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                            child: SizedBox(
+                              height: 32,
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                children: [
+                                  Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(right: 8),
                                       child: Text(
-                                        'Clear',
-                                        style: t.footnote.copyWith(
-                                          color: c.accent,
+                                        'Recent:',
+                                        style: t.caption.copyWith(
+                                          color: c.secondaryLabel,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: settings.recentSearches
-                                      .take(5)
-                                      .map((term) {
-                                    return IosPressable(
-                                      onTap: () {
-                                        _searchController.text = term;
-                                        ref
-                                            .read(dramaControllerProvider)
-                                            .updateSearchQuery(term);
-                                        setState(() {});
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 11,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: c.secondaryBackground,
-                                          borderRadius: MoglogShapes.pill,
-                                          border: Border.all(
-                                            color: c.separator,
-                                            width: 0.7,
+                                  ),
+                                  for (final term
+                                      in settings.recentSearches.take(5))
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: IosPressable(
+                                        onTap: () {
+                                          _searchController.text = term;
+                                          ref
+                                              .read(dramaControllerProvider)
+                                              .updateSearchQuery(term);
+                                          setState(() {});
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 11,
+                                            vertical: 6,
                                           ),
-                                        ),
-                                        child: Text(
-                                          term,
-                                          style: t.caption.copyWith(
-                                            color: c.label,
+                                          decoration: BoxDecoration(
+                                            color: c.secondaryBackground,
+                                            borderRadius: MoglogShapes.pill,
+                                            border: Border.all(
+                                              color: c.separator,
+                                              width: 0.7,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            term,
+                                            style: t.caption.copyWith(
+                                              color: c.label,
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ],
+                                    ),
+                                  Center(
+                                    child: IosPressable(
+                                      onTap: () => ref
+                                          .read(settingsStoreProvider)
+                                          .clearRecentSearches(),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 4,
+                                        ),
+                                        child: Text(
+                                          'Clear',
+                                          style: t.caption.copyWith(
+                                            color: c.accent,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                        // Horizontal Genre Filter Chip Strip
+                        if (rails.trending.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: SizedBox(
+                              height: 34,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                itemCount: _genreFilters.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(width: 8),
+                                itemBuilder: (_, idx) {
+                                  final g = _genreFilters[idx];
+                                  final selected = _selectedGenre == g;
+                                  return IosPressable(
+                                    onTap: () {
+                                      MoglogHaptics.selectionChanged();
+                                      setState(() => _selectedGenre = g);
+                                    },
+                                    pressedScale: 0.95,
+                                    child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 180),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: selected
+                                            ? c.accent
+                                            : c.secondaryBackground,
+                                        borderRadius: MoglogShapes.pill,
+                                        border: Border.all(
+                                          color: selected
+                                              ? c.accent
+                                              : c.separator,
+                                          width: 0.8,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        g,
+                                        style: t.caption.copyWith(
+                                          color: selected
+                                              ? c.onAccent
+                                              : c.label,
+                                          fontWeight: selected
+                                              ? FontWeight.w700
+                                              : FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
                           ),
 
@@ -332,9 +419,30 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                             ),
                           )
                         else ...[
+                          if (_filterByGenre(rails.trending).isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: _TrendingSpotlightCard(
+                                drama: _filterByGenre(rails.trending).first,
+                                isSaved: savedIds.contains(
+                                  _filterByGenre(rails.trending).first.id,
+                                ),
+                                onTap: () {
+                                  final hero =
+                                      _filterByGenre(rails.trending).first;
+                                  ref
+                                      .read(dramaControllerProvider)
+                                      .cacheTransientDrama(hero);
+                                  widget.onDramaTap(hero.id);
+                                },
+                                onQuickAdd: () => _quickAddToPlanned(
+                                  _filterByGenre(rails.trending).first,
+                                ),
+                              ),
+                            ),
                           _DiscoverRail(
                             title: 'Trending This Week',
-                            shows: rails.trending,
+                            shows: _filterByGenre(rails.trending),
                             savedIds: savedIds,
                             onDramaTap: (d) {
                               ref
@@ -346,7 +454,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                           ),
                           _DiscoverRail(
                             title: 'Popular Right Now',
-                            shows: rails.popular,
+                            shows: _filterByGenre(rails.popular),
                             savedIds: savedIds,
                             onDramaTap: (d) {
                               ref
@@ -358,7 +466,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                           ),
                           _DiscoverRail(
                             title: 'Airing Today',
-                            shows: rails.airingToday,
+                            shows: _filterByGenre(rails.airingToday),
                             savedIds: savedIds,
                             onDramaTap: (d) {
                               ref
@@ -370,7 +478,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                           ),
                           _DiscoverRail(
                             title: 'Currently On The Air',
-                            shows: rails.onTheAir,
+                            shows: _filterByGenre(rails.onTheAir),
                             savedIds: savedIds,
                             onDramaTap: (d) {
                               ref
@@ -489,8 +597,11 @@ class _WatchCircleBanner extends StatelessWidget {
                                     base64Decode(friends[i].photoBase64 as String),
                                   )
                                 : ((friends[i].photoUrl as String).isNotEmpty
-                                    ? NetworkImage(friends[i].photoUrl as String)
-                                        as ImageProvider
+                                    ? CachedNetworkImageProvider(
+                                        friends[i].photoUrl as String,
+                                        cacheManager:
+                                            MoglogImageCacheManager.instance,
+                                      ) as ImageProvider
                                     : null),
                             child: ((friends[i].photoBase64 as String).isEmpty &&
                                     (friends[i].photoUrl as String).isEmpty)
@@ -716,6 +827,154 @@ class _DiscoverRailSkeleton extends StatelessWidget {
             const SizedBox(height: 20),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _TrendingSpotlightCard extends StatelessWidget {
+  final Drama drama;
+  final bool isSaved;
+  final VoidCallback onTap;
+  final VoidCallback onQuickAdd;
+
+  const _TrendingSpotlightCard({
+    required this.drama,
+    required this.isSaved,
+    required this.onTap,
+    required this.onQuickAdd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = context.typo;
+    return IosPressable(
+      onTap: onTap,
+      hapticOnTap: true,
+      pressedScale: 0.98,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: ShapeDecoration(
+          color: c.secondaryBackground,
+          shape: MoglogShapes.smooth(
+            MoglogShapes.cardRadius,
+            side: BorderSide(color: c.separator, width: 0.75),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            PosterImage(
+              url: drama.posterPath,
+              width: 86,
+              height: 126,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: c.accent.withValues(alpha: 0.16),
+                          borderRadius: MoglogShapes.pill,
+                        ),
+                        child: Text(
+                          '#1 TRENDING NOW',
+                          style: t.caption2.copyWith(
+                            color: c.accent,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      if (drama.rating > 0) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          MoglogIcons.starFilled,
+                          size: 12,
+                          color: c.starGold,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          drama.rating.toStringAsFixed(1),
+                          style: t.caption.copyWith(
+                            color: c.label,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    drama.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: t.headline.copyWith(color: c.label),
+                  ),
+                  if (drama.overview.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      drama.overview.trim(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.caption.copyWith(
+                        color: c.secondaryLabel,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      IosPressable(
+                        onTap: isSaved ? onTap : onQuickAdd,
+                        hapticOnTap: true,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSaved ? c.tertiaryBackground : c.accent,
+                            borderRadius: MoglogShapes.pill,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isSaved ? MoglogIcons.check : MoglogIcons.plus,
+                                size: 14,
+                                color: isSaved ? c.accent : c.onAccent,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                isSaved ? 'In Library' : 'Add to Planned',
+                                style: t.caption.copyWith(
+                                  color: isSaved ? c.accent : c.onAccent,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

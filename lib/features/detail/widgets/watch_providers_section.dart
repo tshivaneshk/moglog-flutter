@@ -217,40 +217,8 @@ class _WatchProvidersSectionState extends State<WatchProvidersSection> {
     final deviceCountry =
         (ui.PlatformDispatcher.instance.locale.countryCode ?? 'US').toUpperCase();
     final safeCountry = deviceCountry.isEmpty ? 'US' : deviceCountry;
-    final legalHubUrl = widget.watchProviders
-            .map((p) => p.link)
-            .whereType<String>()
-            .where((l) => l.toLowerCase().startsWith('https://'))
-            .firstOrNull ??
-        'https://www.themoviedb.org/tv/${widget.dramaId}/watch';
-
     if (widget.watchProviders.isEmpty) {
-      return IosPressable(
-        onTap: () => launchUrl(
-          Uri.parse(legalHubUrl),
-          mode: LaunchMode.externalApplication,
-        ),
-        hapticOnTap: true,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: ShapeDecoration(
-            color: c.secondaryBackground,
-            shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Where to Watch', style: t.headline.copyWith(color: c.label)),
-              const SizedBox(height: 6),
-              Text(
-                'Not listed in $safeCountry · Tap to check availability on JustWatch',
-                style: t.footnote.copyWith(color: c.secondaryLabel),
-              ),
-            ],
-          ),
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     // Prioritize installed apps while preserving relative order

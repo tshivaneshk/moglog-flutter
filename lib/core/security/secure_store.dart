@@ -24,15 +24,22 @@ class SecureStore {
 
   Future<void> init() async {
     try {
-      final tmdb = await _storage.read(key: _keyTmdbCredential);
-      if (tmdb != null && tmdb.trim().isNotEmpty && tmdb.trim() != _compromisedLegacyKey) {
+      final results = await Future.wait<String?>([
+        _storage.read(key: _keyTmdbCredential),
+        _storage.read(key: _keyBackupPassphrase),
+        _storage.read(key: _keyDbPassphrase),
+      ]);
+      final tmdb = results[0];
+      if (tmdb != null &&
+          tmdb.trim().isNotEmpty &&
+          tmdb.trim() != _compromisedLegacyKey) {
         _memoryCache[_keyTmdbCredential] = tmdb.trim();
       }
-      final backupPass = await _storage.read(key: _keyBackupPassphrase);
+      final backupPass = results[1];
       if (backupPass != null && backupPass.isNotEmpty) {
         _memoryCache[_keyBackupPassphrase] = backupPass;
       }
-      final dbPass = await _storage.read(key: _keyDbPassphrase);
+      final dbPass = results[2];
       if (dbPass != null && dbPass.isNotEmpty) {
         _memoryCache[_keyDbPassphrase] = dbPass;
       }

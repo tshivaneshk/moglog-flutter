@@ -31,8 +31,8 @@ class BackgroundScheduler {
   });
 
   void start() {
-    // Immediate Recycle Bin 30-day purge on startup + every 24h
-    db.purgeExpiredRecycleBin();
+    // Defer initial Recycle Bin 30-day purge & native worker sync slightly post-startup
+    // so startup frames stay 120Hz smooth without main-isolate contention.
     _purgeTimer?.cancel();
     _purgeTimer = Timer.periodic(
       const Duration(hours: 24),
@@ -46,12 +46,14 @@ class BackgroundScheduler {
       }
     });
 
-    // Episode reminders if enabled
-    if (settingsStore.state.episodeRemindersEnabled) {
-      enableEpisodeReminders(runImmediateCheck: false);
-    } else {
-      unawaited(_syncNativeWorker(enabled: false, runImmediate: false));
-    }
+    Future<void>.delayed(const Duration(seconds: 2), () {
+      db.purgeExpiredRecycleBin();
+      if (settingsStore.state.episodeRemindersEnabled) {
+        enableEpisodeReminders(runImmediateCheck: false);
+      } else {
+        unawaited(_syncNativeWorker(enabled: false, runImmediate: false));
+      }
+    });
   }
 
   void enableEpisodeReminders({bool runImmediateCheck = true}) {
@@ -111,8 +113,15 @@ class BackgroundScheduler {
     var notified = 0;
     for (final drama in watching) {
       try {
+        final knownAirDate = drama.nextEpisodeAirDate;
+        // Skip network fetch if we already know the next episode airs strictly after today
+        if (knownAirDate != null &&
+            knownAirDate.length >= 10 &&
+            knownAirDate.substring(0, 10).compareTo(todayIso) > 0) {
+          continue;
+        }
         final extra = await dramaRepository.getDramaExtraDetails(drama.id);
-        final airDate = extra?.nextEpisodeAirDate ?? drama.nextEpisodeAirDate;
+        final airDate = extra?.nextEpisodeAirDate ?? knownAirDate;
         if (airDate != null && airDate.startsWith(todayIso)) {
           await notificationService.showEpisodeReminderNotification(
             drama: drama,

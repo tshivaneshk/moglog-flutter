@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/model/app_settings.dart';
+import '../../domain/model/watch_circle_models.dart';
 
 /// 1:1 port of Kotlin `SettingsStore.kt` (all 21 keys, defaults, and `\u001F` delimiter).
 class SettingsStore {
@@ -388,6 +390,44 @@ class SettingsStore {
 
   Future<void> saveKnownFriends(String uid, Set<String> friends) async {
     await _prefs?.setStringList('known_friends_$uid', friends.toList());
+  }
+
+  /// Locally cached Watch Circle friend profiles so Discover, Settings, and Watch Circle
+  /// always display the shared count & profiles immediately across all screens.
+  List<FriendProfile> getCachedCircleFriends(String uid) {
+    if (uid.trim().isEmpty) return const [];
+    final raw = _prefs?.getString('cached_circle_friends_$uid');
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return decoded
+          .whereType<Map>()
+          .map((e) => FriendProfile.fromMap(Map<String, dynamic>.from(e)))
+          .where((p) => p.uid.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> saveCachedCircleFriends(
+    String uid,
+    List<FriendProfile> friends,
+  ) async {
+    if (uid.trim().isEmpty) return;
+    try {
+      final encoded = jsonEncode(friends.map((f) => f.toMap()).toList());
+      await _prefs?.setString('cached_circle_friends_$uid', encoded);
+    } catch (_) {}
+  }
+
+  bool isLegacyKotlinMigrated() {
+    return _prefs?.getBool('flutter_legacy_kotlin_migrated_v1') ?? false;
+  }
+
+  Future<void> markLegacyKotlinMigrated() async {
+    await _prefs?.setBool('flutter_legacy_kotlin_migrated_v1', true);
   }
 
   void dispose() {

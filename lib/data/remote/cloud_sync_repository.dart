@@ -111,7 +111,10 @@ class CloudSyncRepository {
       try {
         final existing = await backupColl.get();
         if (existing.docs.isNotEmpty) return;
-      } catch (_) {}
+      } catch (_) {
+        // Fail safe on transient read errors: abort rather than risking an empty overwrite
+        return;
+      }
     }
 
     final jsonPayload = jsonEncode(dramas.map((d) => d.toJson()).toList());

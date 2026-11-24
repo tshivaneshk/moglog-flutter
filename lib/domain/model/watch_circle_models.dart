@@ -113,6 +113,54 @@ class FriendProfile {
     }
     return result;
   }
+
+  Map<String, dynamic> toMap() => {
+        'uid': uid,
+        'inviteCode': inviteCode,
+        'displayName': displayName,
+        'photoUrl': photoUrl,
+        'photoBase64': photoBase64,
+        'sharingEnabled': sharingEnabled,
+        'updatedAt': updatedAt,
+        'totalWatched': totalWatched,
+        'totalEpisodes': totalEpisodes,
+        'topGenres': topGenres,
+        'currentlyWatching': currentlyWatching.map((s) => s.toMap()).toList(),
+        'recentlyCompleted': recentlyCompleted.map((s) => s.toMap()).toList(),
+        'plannedShows': plannedShows.map((s) => s.toMap()).toList(),
+        'topFourFavorites': topFourFavorites.map((s) => s.toMap()).toList(),
+      };
+
+  factory FriendProfile.fromMap(Map<String, dynamic> m) {
+    List<SharedShowItem> parseList(String key) {
+      final raw = m[key];
+      if (raw is! List) return const [];
+      return raw
+          .whereType<Map>()
+          .map((e) => SharedShowItem.fromMap(Map<String, dynamic>.from(e)))
+          .where((s) => s.id > 0 && s.title.isNotEmpty)
+          .toList();
+    }
+
+    return FriendProfile(
+      uid: (m['uid'] as String?) ?? '',
+      inviteCode: (m['inviteCode'] as String?) ?? '',
+      displayName: (m['displayName'] as String?) ?? 'Moglog Friend',
+      photoUrl: (m['photoUrl'] as String?) ?? '',
+      photoBase64: (m['photoBase64'] as String?) ?? '',
+      sharingEnabled: (m['sharingEnabled'] as bool?) ?? true,
+      updatedAt: (m['updatedAt'] as num?)?.toInt() ?? 0,
+      totalWatched: (m['totalWatched'] as num?)?.toInt() ?? 0,
+      totalEpisodes: (m['totalEpisodes'] as num?)?.toInt() ?? 0,
+      topGenres: (m['topGenres'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(),
+      currentlyWatching: parseList('currentlyWatching'),
+      recentlyCompleted: parseList('recentlyCompleted'),
+      plannedShows: parseList('plannedShows'),
+      topFourFavorites: parseList('topFourFavorites'),
+    );
+  }
 }
 
 class TasteBlendResult {

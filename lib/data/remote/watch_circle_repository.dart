@@ -20,6 +20,7 @@ class WatchCircleRepository {
   final NotificationService notificationService;
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _membersSub;
+  Future<(List<FriendProfile>, List<CircleNudge>)>? _inFlightFetch;
 
   WatchCircleRepository({
     required this.settingsStore,
@@ -312,14 +313,48 @@ class WatchCircleRepository {
   }
 
   Future<(List<FriendProfile>, List<CircleNudge>)> fetchWatchCircle(
-    List<Drama> myDramas,
-  ) async {
+    List<Drama> myDramas, {
+    bool publishOwnActivity = false,
+  }) async {
     final user = _auth?.currentUser;
     final fs = _firestore;
-    if (user == null || fs == null) return (const <FriendProfile>[], const <CircleNudge>[]);
+    if (user == null || fs == null) {
+      return (const <FriendProfile>[], const <CircleNudge>[]);
+    }
 
-    final myUid = user.uid;
-    final publishFuture = publishMyActivity(myDramas).catchError((_) {});
+    final existing = _inFlightFetch;
+    if (existing != null) {
+      if (publishOwnActivity) {
+        unawaited(publishMyActivity(myDramas).catchError((_) {}));
+      }
+      return existing;
+    }
+
+    final future = _doFetchWatchCircle(
+      user.uid,
+      fs,
+      myDramas,
+      publishOwnActivity: publishOwnActivity,
+    );
+    _inFlightFetch = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_inFlightFetch, future)) {
+        _inFlightFetch = null;
+      }
+    }
+  }
+
+  Future<(List<FriendProfile>, List<CircleNudge>)> _doFetchWatchCircle(
+    String myUid,
+    FirebaseFirestore fs,
+    List<Drama> myDramas, {
+    required bool publishOwnActivity,
+  }) async {
+    final Future<void>? publishFuture = publishOwnActivity
+        ? publishMyActivity(myDramas).catchError((_) {})
+        : null;
 
     final outboundFuture = fs
         .collection('users')
@@ -405,12 +440,15 @@ class WatchCircleRepository {
       }
     }
     await settingsStore.saveKnownFriends(myUid, {...known, ...friendUids});
-    await publishFuture;
+    await settingsStore.saveCachedCircleFriends(myUid, profiles);
+    if (publishFuture != null) {
+      await publishFuture;
+    }
 
     return (profiles, await nudgesFuture);
   }
 
-  void startListeningForCircleMembers() {
+  void startListeningForCircleMembers({void Function()? onMemberChanged}) {
     final user = _auth?.currentUser;
     final fs = _firestore;
     if (user == null || fs == null || _membersSub != null) return;
@@ -424,7 +462,12 @@ class WatchCircleRepository {
         .listen((snap) async {
       final initialized = settingsStore.isKnownFriendsInitialized(myUid);
       final known = settingsStore.getKnownFriends(myUid);
+      var changed = false;
       for (final change in snap.docChanges) {
+        if (change.type == DocumentChangeType.added ||
+            change.type == DocumentChangeType.removed) {
+          changed = true;
+        }
         if (change.type == DocumentChangeType.added) {
           final fUid = change.doc.id;
           if (fUid.isNotEmpty && fUid != myUid && !known.contains(fUid)) {
@@ -444,6 +487,9 @@ class WatchCircleRepository {
             }
           }
         }
+      }
+      if (changed && onMemberChanged != null) {
+        onMemberChanged();
       }
     });
   }

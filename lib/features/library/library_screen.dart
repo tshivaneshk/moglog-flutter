@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -353,6 +355,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final filterState = ref.watch(libraryFilterStateProvider);
 
     final activeDramas = allDramas.where((d) => !d.isDeleted).toList();
+    final plannedDramas =
+        activeDramas.where((d) => d.status == 'Planned').toList();
     final watchingDramas = activeDramas
         .where((d) => d.status == 'Watching')
         .toList()
@@ -463,53 +467,55 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   },
                 ),
               ],
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 34,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _ShelfChip(
-                      label: 'All Shelves',
-                      selected: selectedShelf == null,
-                      onTap: () => ref
-                          .read(librarySelectedShelfProvider.notifier)
-                          .state = null,
-                    ),
-                    const SizedBox(width: 8),
-                    _ShelfChip(
-                      label: 'Top 4 Favorites',
-                      icon: MoglogIcons.starFilled,
-                      iconColor: c.starGold,
-                      selected: selectedShelf == kTopFourShelfKey,
-                      onTap: () => ref
-                          .read(librarySelectedShelfProvider.notifier)
-                          .state = selectedShelf == kTopFourShelfKey
-                              ? null
-                              : kTopFourShelfKey,
-                    ),
-                    for (final shelf in settings.customCollections) ...[
-                      const SizedBox(width: 8),
+              if (!_headerCollapsed || selectedShelf != null) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 34,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
                       _ShelfChip(
-                        label: shelf,
-                        selected: selectedShelf == shelf,
+                        label: 'All Shelves',
+                        selected: selectedShelf == null,
                         onTap: () => ref
                             .read(librarySelectedShelfProvider.notifier)
-                            .state = selectedShelf == shelf ? null : shelf,
-                        onLongPress: () => _showShelfOptionsSheet(shelf),
+                            .state = null,
+                      ),
+                      const SizedBox(width: 8),
+                      _ShelfChip(
+                        label: 'Top 4 Favorites',
+                        icon: MoglogIcons.starFilled,
+                        iconColor: c.starGold,
+                        selected: selectedShelf == kTopFourShelfKey,
+                        onTap: () => ref
+                            .read(librarySelectedShelfProvider.notifier)
+                            .state = selectedShelf == kTopFourShelfKey
+                                ? null
+                                : kTopFourShelfKey,
+                      ),
+                      for (final shelf in settings.customCollections) ...[
+                        const SizedBox(width: 8),
+                        _ShelfChip(
+                          label: shelf,
+                          selected: selectedShelf == shelf,
+                          onTap: () => ref
+                              .read(librarySelectedShelfProvider.notifier)
+                              .state = selectedShelf == shelf ? null : shelf,
+                          onLongPress: () => _showShelfOptionsSheet(shelf),
+                        ),
+                      ],
+                      const SizedBox(width: 8),
+                      _ShelfChip(
+                        label: 'New Shelf',
+                        icon: MoglogIcons.plus,
+                        selected: false,
+                        isAction: true,
+                        onTap: _showNewShelfDialog,
                       ),
                     ],
-                    const SizedBox(width: 8),
-                    _ShelfChip(
-                      label: 'New Shelf',
-                      icon: MoglogIcons.plus,
-                      selected: false,
-                      isAction: true,
-                      onTap: _showNewShelfDialog,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ],
           );
 
@@ -556,6 +562,20 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               collapsed: _headerCollapsed,
               bottomContent: pinnedControls,
               trailingActions: [
+                if (plannedDramas.length >= 2)
+                  IosCircleIconButton(
+                    icon: MoglogIcons.sparkles,
+                    tooltip: 'Surprise Me (Random Planned Show)',
+                    tint: c.accent,
+                    onTap: () {
+                      final pick =
+                          plannedDramas[Random().nextInt(plannedDramas.length)];
+                      ref.read(toastProvider.notifier).show(
+                        'Surprise pick: "${pick.title}"',
+                      );
+                      widget.onDramaTap(pick.id);
+                    },
+                  ),
                 IosCircleIconButton(
                   icon: settings.layoutMode == LibraryLayoutMode.grid
                       ? MoglogIcons.listRows

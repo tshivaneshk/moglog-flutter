@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,7 @@ import '../../core/design_system/icons.dart';
 import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/network/image_cache_manager.dart';
 import '../../data/remote/watch_circle_repository.dart';
 import '../../domain/model/drama.dart';
 import '../../domain/model/watch_circle_models.dart';
@@ -597,17 +599,6 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
               tooltip: 'Back',
               onTap: widget.onBack,
             ),
-            trailingActions: user != null
-                ? [
-                    IosCircleIconButton(
-                      icon: MoglogIcons.refresh,
-                      tooltip: 'Refresh Watch Circle',
-                      onTap: () => ref
-                          .read(authControllerProvider.notifier)
-                          .refreshWatchCircle(),
-                    ),
-                  ]
-                : null,
           ),
           Expanded(
             child: user == null
@@ -635,7 +626,10 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
                     color: c.accent,
                     onRefresh: () => ref
                         .read(authControllerProvider.notifier)
-                        .refreshWatchCircle(),
+                        .refreshWatchCircle(
+                          forceRefresh: true,
+                          publishOwnActivity: true,
+                        ),
                     child: Center(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
@@ -1310,7 +1304,10 @@ class _AvatarCircle extends StatelessWidget {
         imgProvider = MemoryImage(base64Decode(photoBase64));
       } catch (_) {}
     } else if (photoUrl.trim().isNotEmpty) {
-      imgProvider = NetworkImage(photoUrl);
+      imgProvider = CachedNetworkImageProvider(
+        photoUrl,
+        cacheManager: MoglogImageCacheManager.instance,
+      );
     }
 
     return CircleAvatar(

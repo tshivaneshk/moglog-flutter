@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -12,6 +13,7 @@ import '../../core/design_system/icons.dart';
 import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/network/image_cache_manager.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   final VoidCallback onNavigateToAccount;
@@ -36,7 +38,9 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _headerCollapsed = false;
-  String _versionName = '3.1.0';
+  String _versionName = '3.1.1';
+  String _cachedAvatarBase64 = '';
+  MemoryImage? _cachedAvatarImage;
 
   @override
   void initState() {
@@ -102,12 +106,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         : 'Sign in for Cloud Sync & Watch Circle';
 
     ImageProvider? avatarImg;
-    if (settings.customProfileImageBase64.trim().isNotEmpty) {
-      try {
-        avatarImg = MemoryImage(base64Decode(settings.customProfileImageBase64));
-      } catch (_) {}
-    } else if ((user?.photoURL ?? '').isNotEmpty) {
-      avatarImg = NetworkImage(user!.photoURL!);
+    final rawBase64 = settings.customProfileImageBase64.trim();
+    if (rawBase64.isNotEmpty) {
+      if (rawBase64 != _cachedAvatarBase64) {
+        _cachedAvatarBase64 = rawBase64;
+        try {
+          _cachedAvatarImage = MemoryImage(base64Decode(rawBase64));
+        } catch (_) {
+          _cachedAvatarImage = null;
+        }
+      }
+      avatarImg = _cachedAvatarImage;
+    } else {
+      _cachedAvatarBase64 = '';
+      _cachedAvatarImage = null;
+      if ((user?.photoURL ?? '').isNotEmpty) {
+        avatarImg = CachedNetworkImageProvider(
+          user!.photoURL!,
+          cacheManager: MoglogImageCacheManager.instance,
+        );
+      }
     }
 
     return Scaffold(

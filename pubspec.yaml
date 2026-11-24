@@ -1,7 +1,7 @@
 name: moglog_flutter
 description: "Moglog - Clean, private drama & TV tracker"
 publish_to: 'none'
-version: 3.1.0+18
+version: 3.1.1+19
 
 environment:
   sdk: ^3.5.0

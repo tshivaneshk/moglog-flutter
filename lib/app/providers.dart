@@ -98,7 +98,7 @@ final hasApiKeyProvider = StateProvider<bool>(
   (ref) => ref.read(secureStoreProvider).getTmdbCredential().isNotEmpty,
 );
 
-final isInitialReadyProvider = StateProvider<bool>((ref) => false);
+final isInitialReadyProvider = StateProvider<bool>((ref) => true);
 
 final celebrationTriggerProvider = StateProvider<int>((ref) => 0);
 
@@ -177,6 +177,7 @@ class DiscoverRailsState {
   final List<Drama> popular;
   final List<Drama> airingToday;
   final List<Drama> onTheAir;
+  final int fetchedAtMs;
   final String? error;
 
   const DiscoverRailsState({
@@ -185,6 +186,7 @@ class DiscoverRailsState {
     this.popular = const [],
     this.airingToday = const [],
     this.onTheAir = const [],
+    this.fetchedAtMs = 0,
     this.error,
   });
 
@@ -194,6 +196,7 @@ class DiscoverRailsState {
     List<Drama>? popular,
     List<Drama>? airingToday,
     List<Drama>? onTheAir,
+    int? fetchedAtMs,
     Object? error = _sentinel,
   }) {
     return DiscoverRailsState(
@@ -202,6 +205,7 @@ class DiscoverRailsState {
       popular: popular ?? this.popular,
       airingToday: airingToday ?? this.airingToday,
       onTheAir: onTheAir ?? this.onTheAir,
+      fetchedAtMs: fetchedAtMs ?? this.fetchedAtMs,
       error: identical(error, _sentinel) ? this.error : error as String?,
     );
   }
@@ -260,20 +264,13 @@ class DramaController {
   WatchCircleRepository get _circle => ref.read(watchCircleRepositoryProvider);
 
   Future<void> initialize() async {
-    final startMs = DateTime.now().millisecondsSinceEpoch;
+    ref.read(isInitialReadyProvider.notifier).state = true;
     ensureRealtimeListenerStarted();
 
-    // Preload Discover rails if TMDB key is configured
+    // Hydrate / preload Discover rails asynchronously off the critical startup path
     if (_secure.getTmdbCredential().isNotEmpty) {
       unawaited(loadDiscoverRails(forceRefresh: false));
     }
-
-    // Hold splash >= 750ms matching Kotlin startup overlay
-    final elapsed = DateTime.now().millisecondsSinceEpoch - startMs;
-    if (elapsed < 750) {
-      await Future<void>.delayed(Duration(milliseconds: 750 - elapsed));
-    }
-    ref.read(isInitialReadyProvider.notifier).state = true;
   }
 
   void triggerCompletionCelebration() {
@@ -359,7 +356,11 @@ class DramaController {
   Future<void> loadDiscoverRails({bool forceRefresh = false}) async {
     if (_secure.getTmdbCredential().isEmpty) return;
     final current = ref.read(discoverRailsProvider);
-    if (!forceRefresh && current.trending.isNotEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final isFresh = current.trending.isNotEmpty &&
+        current.fetchedAtMs > 0 &&
+        (now - current.fetchedAtMs) < DramaRepositoryImpl.discoverCacheTtlMs;
+    if (!forceRefresh && (current.isLoading || isFresh)) return;
 
     ref.read(discoverRailsProvider.notifier).state =
         current.copyWith(isLoading: true, error: null);
@@ -390,6 +391,7 @@ class DramaController {
         popular: results[1],
         airingToday: results[2],
         onTheAir: results[3],
+        fetchedAtMs: DateTime.now().millisecondsSinceEpoch,
       );
       // Warm visible Discover rail posters in the background using pooled HTTP keep-alive
       final heroPosters = <String>[
@@ -1087,20 +1089,47 @@ class AuthUiState {
 }
 
 class AuthController extends StateNotifier<AuthUiState> {
+  static const int _circleTtlMs = 5 * 60 * 1000; // 5 minutes
+
   final Ref ref;
   StreamSubscription<User?>? _authSub;
+  int _lastCircleRefreshMs = 0;
 
   AuthController(this.ref) : super(const AuthUiState()) {
     if (Firebase.apps.isNotEmpty) {
       final auth = FirebaseAuth.instance;
-      state = state.copyWith(user: auth.currentUser);
+      final current = auth.currentUser;
+      final cachedFriends = current != null
+          ? ref.read(settingsStoreProvider).getCachedCircleFriends(current.uid)
+          : const <FriendProfile>[];
+      state = state.copyWith(
+        user: current,
+        circleFriends: cachedFriends,
+      );
       _authSub = auth.authStateChanges().listen((user) {
-        state = state.copyWith(user: user);
+        final hydratedFriends = user != null
+            ? (state.circleFriends.isNotEmpty
+                ? state.circleFriends
+                : ref
+                    .read(settingsStoreProvider)
+                    .getCachedCircleFriends(user.uid))
+            : const <FriendProfile>[];
+        state = state.copyWith(
+          user: user,
+          circleFriends: hydratedFriends,
+          circleNudges: user != null ? state.circleNudges : const [],
+        );
         ref.read(dramaControllerProvider).ensureRealtimeListenerStarted();
         if (user != null) {
-          ref.read(watchCircleRepositoryProvider).startListeningForCircleMembers();
+          ref.read(watchCircleRepositoryProvider).startListeningForCircleMembers(
+            onMemberChanged: () {
+              unawaited(refreshWatchCircle(forceRefresh: true));
+            },
+          );
           unawaited(ref.read(dramaControllerProvider).reconcileCloudAndLocal());
+          unawaited(refreshWatchCircle(forceRefresh: false));
         } else {
+          _lastCircleRefreshMs = 0;
           ref.read(watchCircleRepositoryProvider).stopListeningForCircleMembers();
         }
       });
@@ -1265,12 +1294,27 @@ class AuthController extends StateNotifier<AuthUiState> {
     }
   }
 
-  Future<void> refreshWatchCircle() async {
-    if (!await isOnline() || state.user == null) return;
+  Future<void> refreshWatchCircle({
+    bool forceRefresh = false,
+    bool publishOwnActivity = false,
+  }) async {
+    final user = state.user;
+    if (user == null) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (!forceRefresh &&
+        state.circleFriends.isNotEmpty &&
+        _lastCircleRefreshMs > 0 &&
+        (now - _lastCircleRefreshMs) < _circleTtlMs) {
+      return;
+    }
+    if (!await isOnline()) return;
     state = state.copyWith(isLoadingCircle: true);
     try {
-      final (friends, nudges) =
-          await _circle.fetchWatchCircle(_repo.getAllDramasSync());
+      final (friends, nudges) = await _circle.fetchWatchCircle(
+        _repo.getAllDramasSync(),
+        publishOwnActivity: publishOwnActivity,
+      );
+      _lastCircleRefreshMs = DateTime.now().millisecondsSinceEpoch;
       state = state.copyWith(
         circleFriends: friends,
         circleNudges: nudges,
@@ -1297,7 +1341,15 @@ class AuthController extends StateNotifier<AuthUiState> {
         updatedFriends.insert(0, friend);
       }
       state = state.copyWith(circleFriends: updatedFriends);
-      unawaited(refreshWatchCircle());
+      final uid = state.user?.uid ?? '';
+      if (uid.isNotEmpty) {
+        unawaited(
+          ref
+              .read(settingsStoreProvider)
+              .saveCachedCircleFriends(uid, updatedFriends),
+        );
+      }
+      unawaited(refreshWatchCircle(forceRefresh: true));
       return friend;
     } finally {
       state = state.copyWith(isLoadingCircle: false);
@@ -1305,12 +1357,17 @@ class AuthController extends StateNotifier<AuthUiState> {
   }
 
   Future<void> removeFriendFromCircle(String friendUid) async {
-    state = state.copyWith(
-      circleFriends:
-          state.circleFriends.where((f) => f.uid != friendUid).toList(),
-    );
+    final remaining =
+        state.circleFriends.where((f) => f.uid != friendUid).toList();
+    state = state.copyWith(circleFriends: remaining);
+    final uid = state.user?.uid ?? '';
+    if (uid.isNotEmpty) {
+      unawaited(
+        ref.read(settingsStoreProvider).saveCachedCircleFriends(uid, remaining),
+      );
+    }
     await _circle.removeFriend(friendUid);
-    await refreshWatchCircle();
+    await refreshWatchCircle(forceRefresh: true);
   }
 
   Future<bool> sendNudge({

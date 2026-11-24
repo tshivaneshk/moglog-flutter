@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -20,9 +22,13 @@ Future<void> _migrateLegacyKotlinIfNeeded(
   SettingsStore settingsStore,
   AppDatabase appDb,
 ) async {
+  if (settingsStore.isLegacyKotlinMigrated()) return;
   try {
     final payload = await PlatformBridge.migrateLegacyKotlinData();
-    if (payload == null) return;
+    if (payload == null) {
+      await settingsStore.markLegacyKotlinMigrated();
+      return;
+    }
 
     final tmdb = (payload['tmdbCredential'] as String? ?? '').trim();
     if (tmdb.isNotEmpty && secureStore.getUserTmdbCredentialOrEmpty().isEmpty) {
@@ -96,6 +102,7 @@ Future<void> _migrateLegacyKotlinIfNeeded(
     }
 
     await PlatformBridge.markLegacyKotlinMigrationComplete();
+    await settingsStore.markLegacyKotlinMigrated();
   } catch (_) {
     // Non-fatal: app proceeds cleanly and can also recover via Cloud Sync
   }
@@ -109,21 +116,15 @@ Future<void> main() async {
   PaintingBinding.instance.imageCache.maximumSize = 400;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 150 << 20;
 
-  try {
-    await Firebase.initializeApp();
-    await FirebaseAppCheck.instance.activate(
-      androidProvider:
-          kReleaseMode ? AndroidProvider.playIntegrity : AndroidProvider.debug,
-    );
-  } catch (_) {
-    // Local-first offline mode continues seamlessly without Firebase config
-  }
-
   final secureStore = SecureStore();
-  await secureStore.init();
-
   final settingsStore = SettingsStore();
-  await settingsStore.init();
+
+  // Initialize local stores and Firebase Core concurrently for minimal time-to-first-frame
+  await Future.wait<void>([
+    secureStore.init(),
+    settingsStore.init(),
+    Firebase.initializeApp().then((_) {}).catchError((_) {}),
+  ]);
 
   final dbKeyHex = await secureStore.getOrCreateDatabaseKeyHex();
   final appDb = AppDatabase();
@@ -133,7 +134,6 @@ Future<void> main() async {
   await _migrateLegacyKotlinIfNeeded(secureStore, settingsStore, appDb);
 
   final notificationService = NotificationService();
-  await notificationService.init();
 
   runApp(
     ProviderScope(
@@ -146,4 +146,18 @@ Future<void> main() async {
       child: const MoglogApp(),
     ),
   );
+
+  // Defer App Check activation and notification channel registration until after runApp()
+  unawaited(notificationService.init().catchError((_) {}));
+  if (Firebase.apps.isNotEmpty) {
+    unawaited(
+      FirebaseAppCheck.instance
+          .activate(
+            androidProvider: kReleaseMode
+                ? AndroidProvider.playIntegrity
+                : AndroidProvider.debug,
+          )
+          .catchError((_) {}),
+    );
+  }
 }

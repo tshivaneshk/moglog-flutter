@@ -734,8 +734,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
           onEpisodesWatchedChange: _handleEpisodesChanged,
         ),
 
-        // Binge & Catch-Up Calculator Card
-        if (drama.totalEpisodes > 0 && bingeEstimate.remainingEpisodes > 0) ...[
+        // Binge & Catch-Up Calculator Card (hidden once completed)
+        if (drama.status != 'Done' &&
+            drama.totalEpisodes > 0 &&
+            bingeEstimate.remainingEpisodes > 0) ...[
           const SizedBox(height: 16),
           _BingeCalculatorCard(
             estimate: bingeEstimate,
@@ -833,15 +835,16 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               _updateDrama(drama.copyWith(myRating: r), immediateSave: true),
         ),
 
-        const SizedBox(height: 16),
-
         // Regional Watch Providers ("Where to Watch")
-        WatchProvidersSection(
-          dramaId: drama.id,
-          dramaTitle: drama.title,
-          watchProviders: _extra?.watchProviders ?? const [],
-          accentColor: accent,
-        ),
+        if ((_extra?.watchProviders ?? const []).isNotEmpty) ...[
+          const SizedBox(height: 16),
+          WatchProvidersSection(
+            dramaId: drama.id,
+            dramaTitle: drama.title,
+            watchProviders: _extra?.watchProviders ?? const [],
+            accentColor: accent,
+          ),
+        ],
 
         // Cast Horizontal Rail
         if ((_extra?.cast ?? const []).isNotEmpty) ...[

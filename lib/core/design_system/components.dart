@@ -224,44 +224,53 @@ class IosCircleIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return IosPressable(
-      onTap: onTap,
-      hapticOnTap: true,
-      pressedScale: 0.92,
-      child: Tooltip(
-        message: tooltip ?? '',
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: backgroundColor ?? c.secondaryBackground,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: c.separator.withValues(alpha: 0.5),
-                  width: 0.5,
-                ),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, size: iconSize, color: tint ?? c.label),
-            ),
-            if (showBadgeDot)
-              Positioned(
-                top: 1,
-                right: 1,
-                child: Container(
-                  width: 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: c.destructive,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: c.background, width: 1.5),
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: IosPressable(
+        onTap: onTap,
+        hapticOnTap: true,
+        pressedScale: 0.92,
+        child: Tooltip(
+          message: tooltip ?? '',
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            child: Center(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      color: backgroundColor ?? c.secondaryBackground,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: c.separator.withValues(alpha: 0.5),
+                        width: 0.5,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(icon, size: iconSize, color: tint ?? c.label),
                   ),
-                ),
+                  if (showBadgeDot)
+                    Positioned(
+                      top: 1,
+                      right: 1,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: c.destructive,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: c.background, width: 1.5),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
       ),
     );
