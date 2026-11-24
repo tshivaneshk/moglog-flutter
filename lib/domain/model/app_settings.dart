@@ -95,6 +95,7 @@ class AppSettings {
   final bool dynamicPosterTint;
   final int gridColumns;
   final LibraryLayoutMode layoutMode;
+  final bool showLayoutSwitchInHome;
   final bool appLockEnabled;
   final int appLockTimeoutSeconds;
   final bool hideInRecents;
@@ -124,6 +125,7 @@ class AppSettings {
     this.dynamicPosterTint = true,
     this.gridColumns = 3,
     this.layoutMode = LibraryLayoutMode.grid,
+    this.showLayoutSwitchInHome = true,
     this.appLockEnabled = false,
     this.appLockTimeoutSeconds = 60,
     this.hideInRecents = false,
@@ -148,6 +150,7 @@ class AppSettings {
     bool? dynamicPosterTint,
     int? gridColumns,
     LibraryLayoutMode? layoutMode,
+    bool? showLayoutSwitchInHome,
     bool? appLockEnabled,
     int? appLockTimeoutSeconds,
     bool? hideInRecents,
@@ -171,6 +174,8 @@ class AppSettings {
       dynamicPosterTint: dynamicPosterTint ?? this.dynamicPosterTint,
       gridColumns: gridColumns ?? this.gridColumns,
       layoutMode: layoutMode ?? this.layoutMode,
+      showLayoutSwitchInHome:
+          showLayoutSwitchInHome ?? this.showLayoutSwitchInHome,
       appLockEnabled: appLockEnabled ?? this.appLockEnabled,
       appLockTimeoutSeconds: appLockTimeoutSeconds ?? this.appLockTimeoutSeconds,
       hideInRecents: hideInRecents ?? this.hideInRecents,

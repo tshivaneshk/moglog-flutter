@@ -164,7 +164,9 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                   )
                 : RefreshIndicator(
                     color: c.accent,
-                    backgroundColor: c.secondaryBackground,
+                    backgroundColor: c.elevatedSurface,
+                    displacement: 28,
+                    strokeWidth: 2.2,
                     onRefresh: () async {
                       MoglogHaptics.lightImpact();
                       await ref
@@ -174,7 +176,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                     child: ListView(
                       controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics(),
+                        parent: ClampingScrollPhysics(),
                       ),
                       keyboardDismissBehavior:
                           ScrollViewKeyboardDismissBehavior.onDrag,

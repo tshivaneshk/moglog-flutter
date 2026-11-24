@@ -357,6 +357,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final activeDramas = allDramas.where((d) => !d.isDeleted).toList();
     final plannedDramas =
         activeDramas.where((d) => d.status == 'Planned').toList();
+    final doneDramas =
+        activeDramas.where((d) => d.status == 'Done').toList();
+    final randomPool = selectedStatus == 'Planned'
+        ? plannedDramas
+        : (selectedStatus == 'Done' ? doneDramas : const <Drama>[]);
     final watchingDramas = activeDramas
         .where((d) => d.status == 'Watching')
         .toList()
@@ -562,32 +567,34 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               collapsed: _headerCollapsed,
               bottomContent: pinnedControls,
               trailingActions: [
-                if (plannedDramas.length >= 2)
+                if ((selectedStatus == 'Planned' || selectedStatus == 'Done') &&
+                    randomPool.length >= 2)
                   IosCircleIconButton(
-                    icon: MoglogIcons.sparkles,
-                    tooltip: 'Surprise Me (Random Planned Show)',
+                    icon: MoglogIcons.dices,
+                    tooltip: 'Random Picker ($selectedStatus)',
                     tint: c.accent,
                     onTap: () {
                       final pick =
-                          plannedDramas[Random().nextInt(plannedDramas.length)];
+                          randomPool[Random().nextInt(randomPool.length)];
                       ref.read(toastProvider.notifier).show(
-                        'Surprise pick: "${pick.title}"',
+                        'Random pick: "${pick.title}"',
                       );
                       widget.onDramaTap(pick.id);
                     },
                   ),
-                IosCircleIconButton(
-                  icon: settings.layoutMode == LibraryLayoutMode.grid
-                      ? MoglogIcons.listRows
-                      : MoglogIcons.grid,
-                  tooltip: 'Toggle grid or list view',
-                  onTap: () {
-                    final next = settings.layoutMode == LibraryLayoutMode.grid
-                        ? LibraryLayoutMode.list
-                        : LibraryLayoutMode.grid;
-                    ref.read(settingsStoreProvider).setLayoutMode(next);
-                  },
-                ),
+                if (settings.showLayoutSwitchInHome)
+                  IosCircleIconButton(
+                    icon: settings.layoutMode == LibraryLayoutMode.grid
+                        ? MoglogIcons.listRows
+                        : MoglogIcons.grid,
+                    tooltip: 'Toggle grid or list view',
+                    onTap: () {
+                      final next = settings.layoutMode == LibraryLayoutMode.grid
+                          ? LibraryLayoutMode.list
+                          : LibraryLayoutMode.grid;
+                      ref.read(settingsStoreProvider).setLayoutMode(next);
+                    },
+                  ),
                 IosCircleIconButton(
                   icon: MoglogIcons.filter,
                   tooltip: 'Sort & Filter',
@@ -630,7 +637,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   )
                 : RefreshIndicator(
                     color: c.accent,
-                    backgroundColor: c.secondaryBackground,
+                    backgroundColor: c.elevatedSurface,
+                    displacement: 28,
+                    strokeWidth: 2.2,
                     onRefresh: () async {
                       MoglogHaptics.lightImpact();
                       await ref
@@ -640,7 +649,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     child: CustomScrollView(
                       controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics(),
+                        parent: ClampingScrollPhysics(),
                       ),
                       keyboardDismissBehavior:
                           ScrollViewKeyboardDismissBehavior.onDrag,

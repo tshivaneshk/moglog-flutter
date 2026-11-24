@@ -16,6 +16,7 @@ class SettingsStore {
   static const String _keyDynamicTint = 'dynamic_poster_tint';
   static const String _keyGridColumns = 'grid_columns';
   static const String _keyLayoutMode = 'layout_mode';
+  static const String _keyShowLayoutSwitchInHome = 'show_layout_switch_in_home';
   static const String _keyAppLockEnabled = 'app_lock_enabled';
   static const String _keyAppLockTimeoutSec = 'app_lock_timeout_sec';
   static const String _keyHideInRecents = 'hide_in_recents';
@@ -144,6 +145,7 @@ class SettingsStore {
       dynamicPosterTint: p.getBool(_keyDynamicTint) ?? true,
       gridColumns: (p.getInt(_keyGridColumns) ?? 3).clamp(2, 4),
       layoutMode: LibraryLayoutMode.fromKey(p.getString(_keyLayoutMode)),
+      showLayoutSwitchInHome: p.getBool(_keyShowLayoutSwitchInHome) ?? true,
       appLockEnabled: p.getBool(_keyAppLockEnabled) ?? false,
       appLockTimeoutSeconds: p.getInt(_keyAppLockTimeoutSec) ?? 60,
       hideInRecents: p.getBool(_keyHideInRecents) ?? false,
@@ -203,6 +205,12 @@ class SettingsStore {
   Future<void> setLayoutMode(LibraryLayoutMode mode) async {
     await _prefs?.setString(_keyLayoutMode, mode.key);
     _state = _state.copyWith(layoutMode: mode);
+    _emit();
+  }
+
+  Future<void> setShowLayoutSwitchInHome(bool enabled) async {
+    await _prefs?.setBool(_keyShowLayoutSwitchInHome, enabled);
+    _state = _state.copyWith(showLayoutSwitchInHome: enabled);
     _emit();
   }
 

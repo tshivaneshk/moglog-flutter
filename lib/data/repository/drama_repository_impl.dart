@@ -264,6 +264,14 @@ class DramaRepositoryImpl {
     db.upsertDrama(drama);
   }
 
+  void saveDramasBatch(List<Drama> dramas) {
+    if (dramas.isEmpty) return;
+    for (final d in dramas) {
+      _summaryMemoryCache[d.id] = d;
+    }
+    db.upsertDramasBatch(dramas);
+  }
+
   void updateDramaStatus(int id, String status) => db.updateDramaStatus(id, status);
 
   void deleteDrama(Drama drama) => db.deleteDramaById(drama.id);

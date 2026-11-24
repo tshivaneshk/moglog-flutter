@@ -624,6 +624,9 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
                   )
                 : RefreshIndicator(
                     color: c.accent,
+                    backgroundColor: c.elevatedSurface,
+                    displacement: 28,
+                    strokeWidth: 2.2,
                     onRefresh: () => ref
                         .read(authControllerProvider.notifier)
                         .refreshWatchCircle(
@@ -636,6 +639,9 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
                           maxWidth: isLandscape ? 780 : double.infinity,
                         ),
                         child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(
+                            parent: ClampingScrollPhysics(),
+                          ),
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 48),
                       children: [
                         // 1. My Watch Circle Pass Card

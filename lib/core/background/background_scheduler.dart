@@ -21,6 +21,7 @@ class BackgroundScheduler {
 
   Timer? _episodeTimer;
   Timer? _purgeTimer;
+  Timer? _workerSyncDebounce;
   StreamSubscription<dynamic>? _dramasSub;
 
   BackgroundScheduler({
@@ -42,7 +43,10 @@ class BackgroundScheduler {
     _dramasSub?.cancel();
     _dramasSub = dramaRepository.watchAllDramas().listen((_) {
       if (settingsStore.state.episodeRemindersEnabled) {
-        unawaited(_syncNativeWorker(enabled: true, runImmediate: false));
+        _workerSyncDebounce?.cancel();
+        _workerSyncDebounce = Timer(const Duration(milliseconds: 600), () {
+          unawaited(_syncNativeWorker(enabled: true, runImmediate: false));
+        });
       }
     });
 
@@ -142,6 +146,7 @@ class BackgroundScheduler {
   void dispose() {
     _episodeTimer?.cancel();
     _purgeTimer?.cancel();
+    _workerSyncDebounce?.cancel();
     _dramasSub?.cancel();
   }
 }

@@ -87,7 +87,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                       subtitle: 'Tap to cycle 2 → 3 → 4 columns',
                       icon: MoglogIcons.grid,
                       iconBackground: c.statusPlanned,
-                      showDivider: false,
+                      showDivider: true,
                       trailing: Text(
                         '${settings.gridColumns} Columns',
                         style: t.subhead.copyWith(
@@ -101,6 +101,16 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                             : (settings.gridColumns == 3 ? 4 : 2);
                         store.setGridColumns(next);
                       },
+                    ),
+                    IosSwitchRow(
+                      title: 'Show Mode Switch in Home',
+                      subtitle:
+                          'Show Grid / Compact List button in Library header',
+                      icon: MoglogIcons.listRows,
+                      iconBackground: c.secondaryLabel,
+                      value: settings.showLayoutSwitchInHome,
+                      showDivider: false,
+                      onChanged: (v) => store.setShowLayoutSwitchInHome(v),
                     ),
                   ],
                 ),

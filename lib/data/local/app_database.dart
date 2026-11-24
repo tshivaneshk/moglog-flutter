@@ -167,6 +167,29 @@ class AppDatabase {
   void upsertDrama(Drama d) {
     final db = _db;
     if (db == null) return;
+    _upsertDramaRow(db, d);
+    _emitDramas();
+  }
+
+  /// Inserts/updates multiple dramas in a single SQLite transaction and emits once,
+  /// preventing N redundant UI rebuilds & native worker syncs during cloud reconcile.
+  void upsertDramasBatch(List<Drama> dramas) {
+    final db = _db;
+    if (db == null || dramas.isEmpty) return;
+    db.execute('BEGIN TRANSACTION');
+    try {
+      for (final d in dramas) {
+        _upsertDramaRow(db, d);
+      }
+      db.execute('COMMIT');
+    } catch (e) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+    _emitDramas();
+  }
+
+  void _upsertDramaRow(Database db, Drama d) {
     db.execute(
       '''
       INSERT OR REPLACE INTO dramas (
@@ -204,7 +227,6 @@ class AppDatabase {
         d.deletedAt,
       ],
     );
-    _emitDramas();
   }
 
   void updateDramaStatus(int id, String status) {

@@ -254,6 +254,7 @@ class DramaController {
   Timer? _cloudSyncDebounce;
   StreamSubscription<dynamic>? _realtimeSub;
   String? _listeningUid;
+  Future<void>? _reconcileInFlight;
 
   DramaController(this.ref);
 
@@ -297,7 +298,20 @@ class DramaController {
     });
   }
 
-  Future<void> reconcileCloudAndLocal() async {
+  Future<void> reconcileCloudAndLocal() {
+    final existing = _reconcileInFlight;
+    if (existing != null) return existing;
+    final future = _doReconcileCloudAndLocal();
+    _reconcileInFlight = future;
+    future.whenComplete(() {
+      if (identical(_reconcileInFlight, future)) {
+        _reconcileInFlight = null;
+      }
+    });
+    return future;
+  }
+
+  Future<void> _doReconcileCloudAndLocal() async {
     CloudData? cloud;
     try {
       cloud = await _cloud.fetchFromCloud();
@@ -309,16 +323,21 @@ class DramaController {
     final localList = _repo.getAllDramasSync();
     final localMap = {for (final d in localList) d.id: d};
     final cloudMap = {for (final d in cloud.dramas) d.id: d};
+    final toUpsert = <Drama>[];
     var localNeedsPush = false;
 
     for (final incoming in cloud.dramas) {
       final existing = localMap[incoming.id];
-      if (existing == null || incoming.updatedAt >= existing.updatedAt) {
-        _repo.saveDrama(incoming);
+      if (existing == null || incoming.updatedAt > existing.updatedAt) {
+        toUpsert.add(incoming);
         localMap[incoming.id] = incoming;
-      } else {
+      } else if (existing.updatedAt > incoming.updatedAt) {
         localNeedsPush = true;
       }
+    }
+
+    if (toUpsert.isNotEmpty) {
+      _repo.saveDramasBatch(toUpsert);
     }
 
     for (final id in localMap.keys) {
@@ -393,19 +412,21 @@ class DramaController {
         onTheAir: results[3],
         fetchedAtMs: DateTime.now().millisecondsSinceEpoch,
       );
-      // Warm visible Discover rail posters in the background using pooled HTTP keep-alive
+      // Warm visible Discover rail posters gently off the startup frame budget
       final heroPosters = <String>[
         for (final list in results)
-          ...list.take(6).map((d) => d.posterPath).where((u) => u.isNotEmpty),
+          ...list.take(4).map((d) => d.posterPath).where((u) => u.isNotEmpty),
       ];
       if (heroPosters.isNotEmpty) {
-        unawaited(
-          MoglogImageCacheManager.prewarmUrls(
-            heroPosters,
-            targetWidthDp: 130,
-            maxConcurrent: 6,
-          ),
-        );
+        Future<void>.delayed(const Duration(milliseconds: 900), () {
+          unawaited(
+            MoglogImageCacheManager.prewarmUrls(
+              heroPosters,
+              targetWidthDp: 130,
+              maxConcurrent: 3,
+            ),
+          );
+        });
       }
     } catch (e) {
       ref.read(discoverRailsProvider.notifier).state = current.copyWith(
@@ -1121,13 +1142,16 @@ class AuthController extends StateNotifier<AuthUiState> {
         );
         ref.read(dramaControllerProvider).ensureRealtimeListenerStarted();
         if (user != null) {
-          ref.read(watchCircleRepositoryProvider).startListeningForCircleMembers(
-            onMemberChanged: () {
-              unawaited(refreshWatchCircle(forceRefresh: true));
-            },
-          );
-          unawaited(ref.read(dramaControllerProvider).reconcileCloudAndLocal());
-          unawaited(refreshWatchCircle(forceRefresh: false));
+          Future<void>.delayed(const Duration(milliseconds: 350), () {
+            if (!mounted) return;
+            ref.read(watchCircleRepositoryProvider).startListeningForCircleMembers(
+              onMemberChanged: () {
+                unawaited(refreshWatchCircle(forceRefresh: true));
+              },
+            );
+            unawaited(ref.read(dramaControllerProvider).reconcileCloudAndLocal());
+            unawaited(refreshWatchCircle(forceRefresh: false));
+          });
         } else {
           _lastCircleRefreshMs = 0;
           ref.read(watchCircleRepositoryProvider).stopListeningForCircleMembers();
@@ -1238,11 +1262,15 @@ class AuthController extends StateNotifier<AuthUiState> {
           .timeout(const Duration(seconds: 30));
       if (data != null && data.dramas.isNotEmpty) {
         final localMap = {for (final d in _repo.getAllDramasSync()) d.id: d};
+        final toUpsert = <Drama>[];
         for (final remote in data.dramas) {
           final local = localMap[remote.id];
-          if (local == null || remote.updatedAt >= local.updatedAt) {
-            _repo.saveDrama(remote);
+          if (local == null || remote.updatedAt > local.updatedAt) {
+            toUpsert.add(remote);
           }
+        }
+        if (toUpsert.isNotEmpty) {
+          _repo.saveDramasBatch(toUpsert);
         }
       }
       state = state.copyWith(isSyncing: false);

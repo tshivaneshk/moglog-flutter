@@ -37,6 +37,8 @@ class MoglogIcons {
   static const IconData upload = LucideIcons.upload;
   static const IconData users = LucideIcons.users;
   static const IconData sparkles = LucideIcons.sparkles;
+  static const IconData dices = LucideIcons.dices;
+  static const IconData shuffle = LucideIcons.shuffle;
   static const IconData copy = LucideIcons.copy;
   static const IconData zap = LucideIcons.zap;
   static const IconData eyeOff = LucideIcons.eyeOff;
