@@ -68,7 +68,7 @@ class _AboutScreenState extends State<AboutScreen> {
   static int? _cachedTotalDownloads;
   static int _cachedDownloadsAtMs = 0;
 
-  String _versionName = '3.1.1';
+  String _versionName = '3.1.2';
   _UpdateCheckState _updateState = const _UpdateIdle();
   int? _totalDownloads;
 

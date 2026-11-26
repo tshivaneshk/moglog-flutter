@@ -8,6 +8,13 @@ All notable changes to the Flutter migration of Moglog (`D:\Antigravity\Moglog\m
 - Audited the entire Kotlin Moglog v3.0.73 codebase (`C:\Users\tshiv\AndroidStudioProjects\Moglog`) in strictly read-only mode.
 - Produced `docs/MIGRATION_AUDIT.md` covering all 13 screens, dialogs/sheets, navigation graph, Room v7 / SQLCipher / DataStore / Firestore data layer, `MOGLOG_ENC_V1` E2E encryption specification, Watch Circle social protocol, 13-tier Prestige Stats & Wrapped card generator, background workers, notifications, design tokens, assets, library mappings, and Android-specific platform channel requirements.
 
+## [3.1.2] - 2026-11-26
+### Security & Reliability
+- **Enterprise Cryptography Upgrade:** Replaced legacy `flutter_secure_storage` v9 (`AES/CBC/PKCS7Padding`) with `flutter_secure_storage` v11 (`AES/GCM/NoPadding` + `RSA/ECB/OAEPWithSHA-256AndMGF1Padding`) and seamless one-time on-device secret migration.
+- **APK & Manifest Hardening:** Disabled APK v1 JAR signing (Janus fix, v2/v3 only), stripped unused Firebase web-auth exported activities and permissions, excluded encrypted DB/keystore files from Android backups, stripped release logs and unreachable API-29 `BiometricPrompt` CBC stubs via R8, and enabled Dart symbol obfuscation (`--obfuscate --split-debug-info`).
+- **App Lock, SQLCipher & Cloud Sync Fixes:** Fixed biometric lockout fail-open bypass in `AppLockOverlay`, switched lock timeout to monotonic `Stopwatch`, enabled SQLCipher encryption & `cipher_memory_security` on both Android and iOS, hardened `BackupCryptoEnvelope` KDF/format validation, reduced Firestore chunk size with stale-chunk cleanup, and batched multi-select operations.
+- **iOS & Xcode CI Verified:** Added `PrivacyInfo.xcprivacy`, `NSPhotoLibraryAddUsageDescription`, Apple App Check (`appAttestWithDeviceCheckFallback`), and iOS notification/share-sheet support; verified on macOS Swift & Xcode GitHub Actions.
+
 ## [3.1.0] - 2026-11-22
 ### Changed — Official Cutover from Native Kotlin (`v3.0.73`) to Flutter (`v3.1.0`)
 - **Official App Identity & Seamless In-Place Upgrade:**

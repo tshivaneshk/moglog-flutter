@@ -38,7 +38,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _headerCollapsed = false;
-  String _versionName = '3.1.1';
+  String _versionName = '3.1.2';
   String _cachedAvatarBase64 = '';
   MemoryImage? _cachedAvatarImage;
 
