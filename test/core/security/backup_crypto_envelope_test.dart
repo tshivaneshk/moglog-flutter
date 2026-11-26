@@ -169,5 +169,45 @@ void main() {
       const plainArray = '[{"id":1,"title":"Plain JSON"}]';
       expect(BackupCryptoEnvelope.parseEnvelopeOrNull(plainArray), isNull);
     });
+
+    test('decrypt rejects unsupported format, KDF, or out-of-range iterations', () async {
+      final valid = await BackupCryptoEnvelope.encrypt(
+        plaintextJson: '[{"id":9,"title":"Andor"}]',
+        passphrase: 'strong-passphrase-abc',
+        uid: 'u9',
+        iterations: testIterations,
+        runInIsolate: false,
+      );
+
+      expect(
+        () => BackupCryptoEnvelope.decrypt(
+          envelope: valid.copyWith(format: 'UNTRUSTED_V0'),
+          passphrase: 'strong-passphrase-abc',
+          expectedUid: 'u9',
+          runInIsolate: false,
+        ),
+        throwsA(isA<BackupDecryptionException>()),
+      );
+
+      expect(
+        () => BackupCryptoEnvelope.decrypt(
+          envelope: valid.copyWith(kdf: 'PlainSHA256'),
+          passphrase: 'strong-passphrase-abc',
+          expectedUid: 'u9',
+          runInIsolate: false,
+        ),
+        throwsA(isA<BackupDecryptionException>()),
+      );
+
+      expect(
+        () => BackupCryptoEnvelope.decrypt(
+          envelope: valid.copyWith(kdfIterations: 1),
+          passphrase: 'strong-passphrase-abc',
+          expectedUid: 'u9',
+          runInIsolate: false,
+        ),
+        throwsA(isA<BackupDecryptionException>()),
+      );
+    });
   });
 }

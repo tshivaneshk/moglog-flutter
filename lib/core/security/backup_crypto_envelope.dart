@@ -105,6 +105,8 @@ class BackupCryptoEnvelope {
   static const int _ivBytes = 12;
   static const int _keyBits = 256;
   static const int _gcmTagBytes = 16;
+  static const int _minKdfIterations = 10000;
+  static const int _maxKdfIterations = 2000000;
 
   static Future<BackupEnvelopePayload> encrypt({
     required String plaintextJson,
@@ -167,6 +169,11 @@ class BackupCryptoEnvelope {
     Uint8List? fixedSalt,
     Uint8List? fixedIv,
   }) async {
+    if (iterations < _minKdfIterations || iterations > _maxKdfIterations) {
+      throw ArgumentError(
+        'KDF iterations must be between $_minKdfIterations and $_maxKdfIterations',
+      );
+    }
     final rng = Random.secure();
     final salt = fixedSalt ??
         Uint8List.fromList(List<int>.generate(_saltBytes, (_) => rng.nextInt(256)));
@@ -205,18 +212,44 @@ class BackupCryptoEnvelope {
     required String passphrase,
     String? expectedUid,
   }) async {
-    final uidForAad = expectedUid ?? envelope.uid;
-    final salt = base64.decode(envelope.salt);
-    final iv = base64.decode(envelope.iv);
-    final combined = base64.decode(envelope.ciphertext);
+    if (envelope.format != BackupEnvelopePayload.formatMagic ||
+        envelope.kdf != BackupEnvelopePayload.kdfAlgo) {
+      throw const BackupDecryptionException(
+        'Unsupported backup envelope format or KDF.',
+      );
+    }
+    if (envelope.kdfIterations < _minKdfIterations ||
+        envelope.kdfIterations > _maxKdfIterations) {
+      throw const BackupDecryptionException(
+        'Backup KDF iteration count is outside allowed security bounds.',
+      );
+    }
 
+    final uidForAad = expectedUid ?? envelope.uid;
+    final Uint8List salt;
+    final Uint8List iv;
+    final Uint8List combined;
+    try {
+      salt = base64.decode(envelope.salt);
+      iv = base64.decode(envelope.iv);
+      combined = base64.decode(envelope.ciphertext);
+    } catch (_) {
+      throw const BackupDecryptionException('Malformed Base64 in backup envelope.');
+    }
+
+    if (salt.length != _saltBytes) {
+      throw const BackupDecryptionException('Invalid salt length in backup envelope.');
+    }
+    if (iv.length != _ivBytes) {
+      throw const BackupDecryptionException('Invalid IV length in backup envelope.');
+    }
     if (combined.length < _gcmTagBytes) {
       throw const BackupDecryptionException('Ciphertext too short');
     }
 
     final cipherText = combined.sublist(0, combined.length - _gcmTagBytes);
     final macBytes = combined.sublist(combined.length - _gcmTagBytes);
-    final iterations = envelope.kdfIterations.clamp(10000, 2000000);
+    final iterations = envelope.kdfIterations;
 
     final secretKey = await _deriveKey(passphrase, salt, iterations);
     final cipher = AesGcm.with256bits();

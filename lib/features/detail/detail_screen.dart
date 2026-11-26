@@ -425,11 +425,13 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               dramaTitle: d.title,
               watchProviders: _extra?.watchProviders ?? const [],
             );
-            Share.share(
-              buildShowShareText(
-                drama: d,
-                isInLibrary: _isSaved,
-                primaryWatch: watch,
+            SharePlus.instance.share(
+              ShareParams(
+                text: buildShowShareText(
+                  drama: d,
+                  isInLibrary: _isSaved,
+                  primaryWatch: watch,
+                ),
               ),
             );
           },
@@ -480,7 +482,14 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 
   @override
   void dispose() {
-    _autosaveDebounce?.cancel();
+    if (_autosaveDebounce?.isActive == true) {
+      _autosaveDebounce?.cancel();
+      if (_drama != null && _isSaved) {
+        ref.read(dramaControllerProvider).saveDrama(_drama!);
+      }
+    } else {
+      _autosaveDebounce?.cancel();
+    }
     _scrollController.dispose();
     super.dispose();
   }
@@ -788,15 +797,19 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               const SizedBox(height: 14),
               Row(
                 children: [
-                  if ((_extra?.trailerKey ?? '').isNotEmpty) ...[
+                  if ((_extra?.trailerKey ?? '').isNotEmpty &&
+                      RegExp(r'^[a-zA-Z0-9_-]{6,16}$')
+                          .hasMatch(_extra!.trailerKey!)) ...[
                     Expanded(
                       child: IosPrimaryButton(
                         text: 'Watch Trailer',
                         leadingIcon: MoglogIcons.play,
                         backgroundColor: accent,
                         onTap: () => launchUrl(
-                          Uri.parse(
-                            'https://www.youtube.com/watch?v=${_extra!.trailerKey}',
+                          Uri.https(
+                            'www.youtube.com',
+                            '/watch',
+                            {'v': _extra!.trailerKey!},
                           ),
                           mode: LaunchMode.externalApplication,
                         ),

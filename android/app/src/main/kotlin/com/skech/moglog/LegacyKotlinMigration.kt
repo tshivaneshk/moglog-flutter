@@ -3,7 +3,6 @@ package com.skech.moglog
 import android.content.Context
 import android.database.Cursor
 import android.util.Base64
-import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -11,6 +10,8 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKeys
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.aead.AeadConfig
@@ -21,6 +22,7 @@ import net.zetetic.database.sqlcipher.SQLiteDatabase
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
 private val Context.legacyMoglogDataStore: DataStore<Preferences> by preferencesDataStore(name = "moglog_settings")
 
@@ -52,8 +54,57 @@ object LegacyKotlinMigration {
     private val AAD_DB_PASSPHRASE = "moglog:db_passphrase:v1".toByteArray(StandardCharsets.UTF_8)
     private val AAD_BACKUP_PASSPHRASE = "moglog:backup_passphrase:v1".toByteArray(StandardCharsets.UTF_8)
 
-    private const val COMPROMISED_LEGACY_KEY = "b30d871ab7f51c18054f0e6d0921da16"
+    private const val COMPROMISED_KEY_SHA256_B64 = "v0DNa/o+RbMKdzCM4ydyF139gLVgs0slaeahbOE/WGE="
+    private const val V9_FSS_FILE = "FlutterSecureStorage"
+    private const val V9_FSS_KEY_PREFIX = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg_"
     private val SQLITE_PLAINTEXT_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
+
+    private fun isCompromisedKey(candidate: String): Boolean {
+        val clean = candidate.trim().lowercase()
+        if (clean.isEmpty()) return false
+        return try {
+            val digest = MessageDigest.getInstance("SHA-256").digest(clean.toByteArray(StandardCharsets.UTF_8))
+            Base64.encodeToString(digest, Base64.NO_WRAP) == COMPROMISED_KEY_SHA256_B64
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Seamless one-time reader for Flutter v3.1.0/v3.1.1 secrets stored in `flutter_secure_storage` v9
+     * `EncryptedSharedPreferences` (`AES256_SIV` / `AES256_GCM`) when upgrading to `flutter_secure_storage` v11.
+     */
+    @Suppress("DEPRECATION")
+    fun readFlutterV9EncryptedPrefs(context: Context): Map<String, String>? {
+        val prefsFile = File(context.applicationInfo.dataDir, "shared_prefs/$V9_FSS_FILE.xml")
+        if (!prefsFile.exists()) return null
+        return try {
+            val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+            val encPrefs = EncryptedSharedPreferences.create(
+                V9_FSS_FILE,
+                masterKeyAlias,
+                context,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+            val result = hashMapOf<String, String>()
+            for (k in listOf(KEY_TMDB_CREDENTIAL, KEY_DB_PASSPHRASE, KEY_BACKUP_PASSPHRASE)) {
+                val v = encPrefs.getString("$V9_FSS_KEY_PREFIX$k", null)
+                    ?: encPrefs.getString(k, null)
+                if (!v.isNullOrEmpty()) {
+                    result[k] = v
+                }
+            }
+            if (result.isEmpty()) null else result
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun purgeFlutterV9EncryptedPrefs(context: Context) {
+        runCatching { context.deleteSharedPreferences(V9_FSS_FILE) }
+        runCatching { File(context.applicationInfo.dataDir, "shared_prefs/$V9_FSS_FILE.xml").delete() }
+    }
 
     fun isMigrationCompleted(context: Context): Boolean {
         return context.getSharedPreferences(MIGRATION_PREFS, Context.MODE_PRIVATE)
@@ -65,6 +116,12 @@ object LegacyKotlinMigration {
             .edit()
             .putBoolean(KEY_MIGRATED, true)
             .apply()
+        // Scrub migrated legacy Kotlin files so unencrypted/legacy copies do not linger on disk
+        runCatching { context.deleteDatabase("drama_db") }
+        for (prefsName in listOf(LEGACY_SECURE_PREFS, KEYSET_PREFS_NAME, "moglog_prefs")) {
+            runCatching { context.deleteSharedPreferences(prefsName) }
+        }
+        runCatching { File(context.filesDir, "datastore/moglog_settings.preferences_pb").delete() }
     }
 
     fun readLegacyKotlinPayload(context: Context): Map<String, Any?>? {
@@ -85,8 +142,6 @@ object LegacyKotlinMigration {
             return null
         }
 
-        Log.i(TAG, "Detected existing Kotlin Moglog v3.0.x installation. Reading legacy data for seamless upgrade...")
-
         val secrets = readLegacySecrets(context, legacySecurePrefs, legacyPlainPrefs)
         val settings = readLegacySettings(context, datastoreFile, legacyPlainPrefs)
         val dbKeyBytes = secrets.dbPassphraseBytes
@@ -105,7 +160,7 @@ object LegacyKotlinMigration {
             )
         }
 
-        val payload = hashMapOf<String, Any?>(
+        return hashMapOf(
             "tmdbCredential" to secrets.tmdbCredential,
             "backupPassphrase" to secrets.backupPassphrase,
             "settings" to settings,
@@ -113,12 +168,6 @@ object LegacyKotlinMigration {
             "shortcuts" to shortcuts,
             "detailCache" to detailCache
         )
-        Log.i(
-            TAG,
-            "Prepared legacy migration payload: dramas=${dramas.size}, shortcuts=${shortcuts.size}, " +
-                "cache=${detailCache.size}, hasTmdb=${secrets.tmdbCredential.isNotBlank()}, settings=${settings.size}"
-        )
-        return payload
     }
 
     private data class LegacySecrets(
@@ -144,8 +193,7 @@ object LegacyKotlinMigration {
                     .build()
                     .keysetHandle
                     .getPrimitive(Aead::class.java)
-            } catch (e: Exception) {
-                Log.w(TAG, "Hardware Tink keyset unavailable during migration: ${e.message}")
+            } catch (_: Exception) {
                 null
             }
             swAead = try {
@@ -155,12 +203,10 @@ object LegacyKotlinMigration {
                     .build()
                     .keysetHandle
                     .getPrimitive(Aead::class.java)
-            } catch (e: Exception) {
-                Log.w(TAG, "Software Tink keyset unavailable during migration: ${e.message}")
+            } catch (_: Exception) {
                 null
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Tink init failed during migration: ${e.message}")
+        } catch (_: Exception) {
         }
 
         fun decrypt(key: String, aad: ByteArray): String? {
@@ -193,11 +239,11 @@ object LegacyKotlinMigration {
         var tmdb = decrypt(KEY_TMDB_CREDENTIAL, AAD_TMDB_CREDENTIAL).orEmpty().trim()
         if (tmdb.isEmpty()) {
             val plain = legacyPlainPrefs.getString("tmdb_api_key", "")?.trim().orEmpty()
-            if (plain.isNotEmpty() && plain != COMPROMISED_LEGACY_KEY) {
+            if (plain.isNotEmpty() && !isCompromisedKey(plain)) {
                 tmdb = plain
             }
         }
-        if (tmdb == COMPROMISED_LEGACY_KEY) tmdb = ""
+        if (isCompromisedKey(tmdb)) tmdb = ""
 
         val backupPass = decrypt(KEY_BACKUP_PASSPHRASE, AAD_BACKUP_PASSPHRASE).orEmpty().trim()
         val dbKeyB64 = decrypt(KEY_DB_PASSPHRASE, AAD_DB_PASSPHRASE)
@@ -258,8 +304,7 @@ object LegacyKotlinMigration {
             prefs[stringPreferencesKey("top_four_favorite_ids")]?.let { result["top_four_favorite_ids"] = it }
             prefs[stringPreferencesKey("custom_collections")]?.let { result["custom_collections"] = it }
             prefs[stringPreferencesKey("custom_invite_code")]?.let { result["custom_invite_code"] = it }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed reading legacy DataStore preferences: ${e.message}")
+        } catch (_: Exception) {
         }
 
         // If user already upgraded from Kotlin with data/settings, never re-show onboarding
@@ -291,18 +336,14 @@ object LegacyKotlinMigration {
     ) {
         try {
             System.loadLibrary("sqlcipher")
-        } catch (e: Throwable) {
-            Log.w(TAG, "Failed loading libsqlcipher: ${e.message}")
+        } catch (_: Throwable) {
         }
 
         val isPlaintext = isPlaintextSqlite(dbFile)
         val effectiveKey: ByteArray = if (isPlaintext) {
             ByteArray(0)
         } else {
-            passphraseBytes ?: run {
-                Log.w(TAG, "Encrypted legacy drama_db exists but no Tink DB key was recovered.")
-                return
-            }
+            passphraseBytes ?: return
         }
 
         var db: SQLiteDatabase? = null
@@ -384,8 +425,7 @@ object LegacyKotlinMigration {
                     }
                 }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Unable to read legacy SQLCipher database: ${e.message}", e)
+        } catch (_: Exception) {
         } finally {
             runCatching { db?.close() }
         }

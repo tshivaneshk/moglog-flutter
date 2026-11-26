@@ -406,12 +406,17 @@ class TmdbApi {
         final rawAvatar = details?['avatar_path'] as String?;
         String? avatarUrl;
         if (rawAvatar != null && rawAvatar.trim().isNotEmpty) {
-          if (rawAvatar.startsWith('/http')) {
-            avatarUrl = rawAvatar.substring(1);
-          } else if (rawAvatar.startsWith('http')) {
-            avatarUrl = rawAvatar;
-          } else {
-            avatarUrl = '$thumbBaseUrl$rawAvatar';
+          var candidate = rawAvatar.trim();
+          if (candidate.startsWith('/http')) {
+            candidate = candidate.substring(1);
+          }
+          final lower = candidate.toLowerCase();
+          if (lower.startsWith('https://')) {
+            avatarUrl = candidate;
+          } else if (lower.startsWith('http://')) {
+            avatarUrl = 'https://${candidate.substring(7)}';
+          } else if (candidate.startsWith('/')) {
+            avatarUrl = '$thumbBaseUrl$candidate';
           }
         }
         final author = (r['author'] as String?)?.trim();

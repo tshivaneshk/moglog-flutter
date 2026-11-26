@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -193,6 +194,15 @@ class _AdvancedSettingsScreenState
     final isEnc = passphrase != null && passphrase.isNotEmpty;
 
     BuildContext? dialogCtx;
+    var dialogClosed = false;
+    void closeLoadingDialog() {
+      dialogClosed = true;
+      if (dialogCtx != null && dialogCtx!.mounted) {
+        Navigator.of(dialogCtx!, rootNavigator: true).pop();
+        dialogCtx = null;
+      }
+    }
+
     if (mounted) {
       unawaited(
         showDialog<void>(
@@ -201,6 +211,13 @@ class _AdvancedSettingsScreenState
           useRootNavigator: true,
           builder: (ctx) {
             dialogCtx = ctx;
+            if (dialogClosed) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (ctx.mounted) {
+                  Navigator.of(ctx, rootNavigator: true).pop();
+                }
+              });
+            }
             final c = ctx.colors;
             final t = ctx.typo;
             return AlertDialog(
@@ -233,24 +250,24 @@ class _AdvancedSettingsScreenState
 
     try {
       final bytes = await dramaCtrl.buildExportBytes(passphrase: passphrase);
-      if (dialogCtx != null && dialogCtx!.mounted) {
-        Navigator.of(dialogCtx!, rootNavigator: true).pop();
-        dialogCtx = null;
-      }
+      closeLoadingDialog();
 
       final ts = DateTime.now().millisecondsSinceEpoch;
       final fileName =
           isEnc ? 'moglog_backup_$ts.moglog' : 'moglog_library_$ts.csv';
 
-      final savedPath = await FilePicker.platform.saveFile(
+      final savedUri = await FilePicker.saveFile(
         dialogTitle: 'Save Moglog Backup',
         fileName: fileName,
+        mimeType: isEnc ? 'application/octet-stream' : 'text/csv',
         bytes: bytes,
       );
-      if (savedPath != null && savedPath.isNotEmpty) {
-        if (!Platform.isAndroid && !Platform.isIOS) {
+      if (savedUri != null) {
+        if (!Platform.isAndroid &&
+            !Platform.isIOS &&
+            savedUri.scheme == 'file') {
           try {
-            final f = File(savedPath);
+            final f = File(savedUri.toFilePath());
             if (!await f.exists() || await f.length() == 0) {
               await f.writeAsBytes(bytes);
             }
@@ -262,9 +279,7 @@ class _AdvancedSettingsScreenState
         );
       }
     } catch (e) {
-      if (dialogCtx != null && dialogCtx!.mounted) {
-        Navigator.of(dialogCtx!, rootNavigator: true).pop();
-      }
+      closeLoadingDialog();
       toastNotifier.show('Export failed: $e');
     }
   }
@@ -286,20 +301,21 @@ class _AdvancedSettingsScreenState
 
   Future<void> _pickAndImportFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        withData: true,
-      );
-      if (result == null || result.files.isEmpty) return;
-      final file = result.files.first;
-      Uint8List? bytes = file.bytes;
-      if (bytes == null && file.path != null) {
-        bytes = await File(file.path!).readAsBytes();
+      const maxBytes = 10 * 1024 * 1024;
+      final file = await FilePicker.pickFile(type: FileType.any);
+      if (file == null) return;
+      final knownLen = file.lengthSync() ?? await file.length();
+      if (knownLen != null && knownLen > maxBytes) {
+        ref
+            .read(toastProvider.notifier)
+            .show('Backup file exceeds 10 MB limit.');
+        return;
       }
-      if (bytes == null || !mounted) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
 
       // Check if it is an encrypted MOGLOG_ENC_V1 envelope
-      final preview = String.fromCharCodes(bytes.take(2048));
+      final preview = utf8.decode(bytes.take(2048).toList(), allowMalformed: true);
       final isEncrypted = preview.contains(BackupEnvelopePayload.formatMagic);
       if (isEncrypted) {
         _promptImportPassphrase(bytes);
@@ -396,6 +412,15 @@ class _AdvancedSettingsScreenState
     );
 
     BuildContext? dialogCtx;
+    var dialogClosed = false;
+    void closeLoadingDialog() {
+      dialogClosed = true;
+      if (dialogCtx != null && dialogCtx!.mounted) {
+        Navigator.of(dialogCtx!, rootNavigator: true).pop();
+        dialogCtx = null;
+      }
+    }
+
     if (mounted) {
       unawaited(
         showDialog<void>(
@@ -404,6 +429,13 @@ class _AdvancedSettingsScreenState
           useRootNavigator: true,
           builder: (ctx) {
             dialogCtx = ctx;
+            if (dialogClosed) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (ctx.mounted) {
+                  Navigator.of(ctx, rootNavigator: true).pop();
+                }
+              });
+            }
             final c = ctx.colors;
             final t = ctx.typo;
             return AlertDialog(
@@ -479,10 +511,7 @@ class _AdvancedSettingsScreenState
           progress.value = (stage: stage, done: done, total: total);
         },
       );
-      if (dialogCtx != null && dialogCtx!.mounted) {
-        Navigator.of(dialogCtx!, rootNavigator: true).pop();
-        dialogCtx = null;
-      }
+      closeLoadingDialog();
 
       if (summary.errorMessage != null) {
         toastNotifier.show(summary.errorMessage!);
@@ -501,9 +530,7 @@ class _AdvancedSettingsScreenState
         }
       }
     } catch (e) {
-      if (dialogCtx != null && dialogCtx!.mounted) {
-        Navigator.of(dialogCtx!, rootNavigator: true).pop();
-      }
+      closeLoadingDialog();
       toastNotifier.show('Import failed: $e');
     } finally {
       progress.dispose();

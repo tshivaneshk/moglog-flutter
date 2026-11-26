@@ -1,5 +1,8 @@
 package com.skech.moglog
 
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -10,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.PersistableBundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -18,6 +22,7 @@ import android.view.WindowManager
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
@@ -25,6 +30,10 @@ import kotlin.math.sin
 class MainActivity : FlutterFragmentActivity() {
 
     private val channelName = "com.skech.moglog/platform"
+    private val allowedDeepLinkTargets = setOf("watch_circle")
+    private val allowedLaunchSchemes = setOf("https", "nflx")
+    private val safePackageRegex = Regex("^[a-zA-Z0-9_]+(\\.[a-zA-Z0-9_]+)+$")
+
     private var methodChannel: MethodChannel? = null
     private var pendingOpenDramaId: Int = -1
     private var pendingNavigateTarget: String? = null
@@ -61,8 +70,8 @@ class MainActivity : FlutterFragmentActivity() {
             pendingOpenDramaId = dramaId
             intent.removeExtra("open_drama_id")
         }
-        val target = intent.getStringExtra("navigate_to")
-        if (!target.isNullOrBlank()) {
+        val target = intent.getStringExtra("navigate_to")?.trim()
+        if (!target.isNullOrEmpty() && target in allowedDeepLinkTargets) {
             pendingNavigateTarget = target
             intent.removeExtra("navigate_to")
         }
@@ -102,6 +111,26 @@ class MainActivity : FlutterFragmentActivity() {
                         LegacyKotlinMigration.markMigrationCompleted(applicationContext)
                         result.success(true)
                     }
+                    "migrateV9EncryptedPrefs" -> {
+                        Thread {
+                            val migrated = try {
+                                LegacyKotlinMigration.readFlutterV9EncryptedPrefs(applicationContext)
+                            } catch (_: Exception) {
+                                null
+                            }
+                            runOnUiThread { result.success(migrated) }
+                        }.start()
+                    }
+                    "purgeV9EncryptedPrefs" -> {
+                        LegacyKotlinMigration.purgeFlutterV9EncryptedPrefs(applicationContext)
+                        result.success(true)
+                    }
+                    "copySensitiveClipboard" -> {
+                        val label = call.argument<String>("label") ?: "Moglog"
+                        val text = call.argument<String>("text") ?: ""
+                        copySensitiveClipboard(label, text)
+                        result.success(true)
+                    }
                     "syncEpisodeReminderWorker" -> {
                         val enabled = call.argument<Boolean>("enabled") ?: false
                         val watchingJson = call.argument<String>("watchingJson") ?: "[]"
@@ -129,23 +158,31 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(true)
                     }
                     "isPackageInstalled" -> {
-                        val pkg = call.argument<String>("packageName").orEmpty()
+                        val pkg = call.argument<String>("packageName").orEmpty().trim()
                         val installed = try {
-                            pkg.isNotBlank() && packageManager.getLaunchIntentForPackage(pkg) != null
+                            pkg.matches(safePackageRegex) &&
+                                packageManager.getLaunchIntentForPackage(pkg) != null
                         } catch (_: Exception) {
                             false
                         }
                         result.success(installed)
                     }
                     "launchPackageDeepLink" -> {
-                        val pkg = call.argument<String>("packageName").orEmpty()
-                        val uriStr = call.argument<String>("uri").orEmpty()
+                        val pkg = call.argument<String>("packageName").orEmpty().trim()
+                        val uriStr = call.argument<String>("uri").orEmpty().trim()
                         val launched = try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply {
-                                if (pkg.isNotBlank()) setPackage(pkg)
+                            val parsed = Uri.parse(uriStr)
+                            val scheme = parsed.scheme?.lowercase()
+                            if (scheme == null || scheme !in allowedLaunchSchemes) {
+                                false
+                            } else {
+                                val intent = Intent(Intent.ACTION_VIEW, parsed).apply {
+                                    addCategory(Intent.CATEGORY_BROWSABLE)
+                                    if (pkg.matches(safePackageRegex)) setPackage(pkg)
+                                }
+                                startActivity(intent)
+                                true
                             }
-                            startActivity(intent)
-                            true
                         } catch (_: Exception) {
                             false
                         }
@@ -193,11 +230,32 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    private fun copySensitiveClipboard(label: String, text: String) {
+        try {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+            val clip = ClipData.newPlainText(label, text)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                clip.description.extras = PersistableBundle().apply {
+                    putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+                }
+            } else {
+                clip.description.extras = PersistableBundle().apply {
+                    putBoolean("android.content.extra.IS_SENSITIVE", true)
+                }
+            }
+            clipboard.setPrimaryClip(clip)
+        } catch (_: Exception) {
+        }
+    }
+
     private fun savePngToGallery(bytes: ByteArray, fileName: String): Boolean {
+        val resolver = contentResolver
+        var insertedUri: Uri? = null
         return try {
-            val resolver = contentResolver
+            val cleanBase = File(fileName).name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val safeName = if (cleanBase.lowercase().endsWith(".png")) cleanBase else "$cleanBase.png"
             val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.DISPLAY_NAME, safeName)
                 put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Moglog")
@@ -206,7 +264,12 @@ class MainActivity : FlutterFragmentActivity() {
             }
             val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
                 ?: return false
-            resolver.openOutputStream(uri)?.use { out ->
+            insertedUri = uri
+            val stream = resolver.openOutputStream(uri) ?: run {
+                runCatching { resolver.delete(uri, null, null) }
+                return false
+            }
+            stream.use { out ->
                 out.write(bytes)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -216,6 +279,9 @@ class MainActivity : FlutterFragmentActivity() {
             }
             true
         } catch (_: Exception) {
+            insertedUri?.let { uri ->
+                runCatching { resolver.delete(uri, null, null) }
+            }
             false
         }
     }
@@ -225,6 +291,7 @@ class MainActivity : FlutterFragmentActivity() {
      */
     private fun playCompletionChime() {
         Thread {
+            var audioTrack: AudioTrack? = null
             try {
                 val sampleRate = 44100
                 val durationSec = 0.60
@@ -249,7 +316,7 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     buffer[i] = (sample.coerceIn(-1.0, 1.0) * Short.MAX_VALUE).toInt().toShort()
                 }
-                val audioTrack = AudioTrack.Builder()
+                val track = AudioTrack.Builder()
                     .setAudioAttributes(
                         AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
@@ -266,12 +333,14 @@ class MainActivity : FlutterFragmentActivity() {
                     .setBufferSizeInBytes(buffer.size * 2)
                     .setTransferMode(AudioTrack.MODE_STATIC)
                     .build()
-                audioTrack.write(buffer, 0, buffer.size)
-                audioTrack.play()
+                audioTrack = track
+                track.write(buffer, 0, buffer.size)
+                track.play()
                 Thread.sleep(700)
-                audioTrack.stop()
-                audioTrack.release()
             } catch (_: Exception) {
+            } finally {
+                runCatching { audioTrack?.stop() }
+                runCatching { audioTrack?.release() }
             }
         }.start()
     }

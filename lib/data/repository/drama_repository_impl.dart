@@ -42,6 +42,22 @@ class DramaRepositoryImpl {
 
   DramaRepositoryImpl({required this.api, required this.db});
 
+  void _putSummaryCache(Drama d) {
+    if (!_summaryMemoryCache.containsKey(d.id) &&
+        _summaryMemoryCache.length >= 256) {
+      _summaryMemoryCache.remove(_summaryMemoryCache.keys.first);
+    }
+    _summaryMemoryCache[d.id] = d;
+  }
+
+  void _putSearchCache(String key, _CachedList entry) {
+    if (!_searchMemoryCache.containsKey(key) &&
+        _searchMemoryCache.length >= 64) {
+      _searchMemoryCache.remove(_searchMemoryCache.keys.first);
+    }
+    _searchMemoryCache[key] = entry;
+  }
+
   Stream<List<Drama>> watchAllDramas() => db.watchAllDramas();
 
   List<Drama> getAllDramasSync() => db.getAllDramasSync();
@@ -63,12 +79,15 @@ class DramaRepositoryImpl {
       try {
         final results = await api.searchDramas(query);
         if (results.isNotEmpty) {
-          _searchMemoryCache[normalized] = _CachedList(
-            results,
-            DateTime.now().millisecondsSinceEpoch,
+          _putSearchCache(
+            normalized,
+            _CachedList(
+              results,
+              DateTime.now().millisecondsSinceEpoch,
+            ),
           );
           for (final d in results) {
-            _summaryMemoryCache[d.id] = d;
+            _putSummaryCache(d);
           }
         }
         return results;
@@ -124,7 +143,7 @@ class DramaRepositoryImpl {
             if (parsed.isNotEmpty) {
               staleDbItems = parsed;
               for (final d in parsed) {
-                _summaryMemoryCache[d.id] = d;
+                _putSummaryCache(d);
               }
               if (!forceRefresh &&
                   (now - dbCached.cachedAt) < discoverCacheTtlMs) {
@@ -148,7 +167,7 @@ class DramaRepositoryImpl {
           final fetchedAt = DateTime.now().millisecondsSinceEpoch;
           _railMemoryCache[key] = _CachedList(fresh, fetchedAt);
           for (final d in fresh) {
-            _summaryMemoryCache[d.id] = d;
+            _putSummaryCache(d);
           }
           if (dbId != null) {
             try {
@@ -223,10 +242,10 @@ class DramaRepositoryImpl {
         final now = DateTime.now().millisecondsSinceEpoch;
         db.putDetailCache(id, jsonEncode(details.toJson()), now);
         if (summary != null) {
-          _summaryMemoryCache[id] = summary;
+          _putSummaryCache(summary);
         }
         for (final rec in details.recommendations) {
-          _summaryMemoryCache[rec.id] = rec;
+          _putSummaryCache(rec);
         }
         if (_extraMemoryCache.length >= 64) {
           _extraMemoryCache.remove(_extraMemoryCache.keys.first);
@@ -260,14 +279,14 @@ class DramaRepositoryImpl {
   }
 
   void saveDrama(Drama drama) {
-    _summaryMemoryCache[drama.id] = drama;
+    _putSummaryCache(drama);
     db.upsertDrama(drama);
   }
 
   void saveDramasBatch(List<Drama> dramas) {
     if (dramas.isEmpty) return;
     for (final d in dramas) {
-      _summaryMemoryCache[d.id] = d;
+      _putSummaryCache(d);
     }
     db.upsertDramasBatch(dramas);
   }

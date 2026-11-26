@@ -71,6 +71,18 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
         topShows: snap.topRatedShows.take(4).toList(),
       );
       final name = 'Moglog_Wrapped_${DateTime.now().millisecondsSinceEpoch}.png';
+      if (Platform.isIOS) {
+        final dir = await getTemporaryDirectory();
+        final outFile = File('${dir.path}/$name');
+        await outFile.writeAsBytes(png);
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(outFile.path, mimeType: 'image/png')],
+            subject: 'Moglog Wrapped',
+          ),
+        );
+        return;
+      }
       final ok = await PlatformBridge.saveImageToGallery(png, name);
       ref.read(toastProvider.notifier).show(
             ok
@@ -96,10 +108,12 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
       final dir = await getTemporaryDirectory();
       final outFile = File('${dir.path}/moglog_wrapped_card.png');
       await outFile.writeAsBytes(png);
-      await Share.shareXFiles(
-        [XFile(outFile.path, mimeType: 'image/png')],
-        text:
-            'My Moglog Wrapped: ${snap.bingePersona.title} (${snap.bingePersona.rankBadge}) — ${snap.estimatedHours}h watched across ${snap.totalEpisodesWatched} episodes!',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(outFile.path, mimeType: 'image/png')],
+          text:
+              'My Moglog Wrapped: ${snap.bingePersona.title} (${snap.bingePersona.rankBadge}) — ${snap.estimatedHours}h watched across ${snap.totalEpisodesWatched} episodes!',
+        ),
       );
     } catch (_) {}
   }

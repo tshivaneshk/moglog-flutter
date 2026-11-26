@@ -18,7 +18,7 @@ class CloudData {
 /// 100% Firestore wire-compatible port of Kotlin `CloudSyncRepository.kt`.
 /// Safely degrades when Firebase has not yet been configured for this flavor.
 class CloudSyncRepository {
-  static const int maxChunkChars = 450000;
+  static const int maxChunkChars = 240000;
 
   final SecureStore secureStore;
   final SettingsStore settingsStore;
@@ -106,15 +106,18 @@ class CloudSyncRepository {
     _lastLocalSyncTimestamp = now;
     await settingsStore.setLastSyncedAt(now);
 
-    if (dramas.isEmpty) {
-      // Safety guard: never overwrite existing non-empty cloud backup with 0 shows
-      try {
-        final existing = await backupColl.get();
-        if (existing.docs.isNotEmpty) return;
-      } catch (_) {
+    QuerySnapshot<Map<String, dynamic>>? existingSnap;
+    try {
+      existingSnap = await backupColl.get();
+    } catch (_) {
+      if (dramas.isEmpty) {
         // Fail safe on transient read errors: abort rather than risking an empty overwrite
         return;
       }
+    }
+    if (dramas.isEmpty && existingSnap != null && existingSnap.docs.isNotEmpty) {
+      // Safety guard: never overwrite existing non-empty cloud backup with 0 shows
+      return;
     }
 
     final jsonPayload = jsonEncode(dramas.map((d) => d.toJson()).toList());
@@ -127,8 +130,11 @@ class CloudSyncRepository {
         uid: uid,
       );
       final chunks = chunkString(envelope.ciphertext, maxChunkChars);
+      final activeIds = <String>{};
       for (var idx = 0; idx < chunks.length; idx++) {
-        batch.set(backupColl.doc('chunk_$idx'), {
+        final docId = 'chunk_$idx';
+        activeIds.add(docId);
+        batch.set(backupColl.doc(docId), {
           'index': idx,
           'totalChunks': chunks.length,
           'encrypted': true,
@@ -142,8 +148,16 @@ class CloudSyncRepository {
           'updatedAt': now,
         });
       }
-      for (var extra = chunks.length; extra <= chunks.length + 2; extra++) {
-        batch.delete(backupColl.doc('chunk_$extra'));
+      if (existingSnap != null) {
+        for (final doc in existingSnap.docs) {
+          if (!activeIds.contains(doc.id)) {
+            batch.delete(doc.reference);
+          }
+        }
+      } else {
+        for (var extra = chunks.length; extra <= chunks.length + 5; extra++) {
+          batch.delete(backupColl.doc('chunk_$extra'));
+        }
       }
       batch.set(
         userDocRef,
@@ -157,8 +171,11 @@ class CloudSyncRepository {
       await batch.commit();
     } else {
       final chunks = chunkString(jsonPayload, maxChunkChars);
+      final activeIds = <String>{};
       for (var idx = 0; idx < chunks.length; idx++) {
-        batch.set(backupColl.doc('chunk_$idx'), {
+        final docId = 'chunk_$idx';
+        activeIds.add(docId);
+        batch.set(backupColl.doc(docId), {
           'index': idx,
           'totalChunks': chunks.length,
           'encrypted': false,
@@ -166,8 +183,16 @@ class CloudSyncRepository {
           'updatedAt': now,
         });
       }
-      for (var extra = chunks.length; extra <= chunks.length + 2; extra++) {
-        batch.delete(backupColl.doc('chunk_$extra'));
+      if (existingSnap != null) {
+        for (final doc in existingSnap.docs) {
+          if (!activeIds.contains(doc.id)) {
+            batch.delete(doc.reference);
+          }
+        }
+      } else {
+        for (var extra = chunks.length; extra <= chunks.length + 5; extra++) {
+          batch.delete(backupColl.doc('chunk_$extra'));
+        }
       }
       batch.set(
         userDocRef,
@@ -265,7 +290,7 @@ class CloudSyncRepository {
     }
 
     // 1. Subcollection `users/{uid}/backup`
-    final backupDocs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
+    final sortedDocs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
       backupSnap.docs,
     )..sort((a, b) {
         final ai = (a.data()['index'] as num?)?.toInt() ?? 0;
@@ -273,8 +298,16 @@ class CloudSyncRepository {
         return ai.compareTo(bi);
       });
 
-    if (backupDocs.isNotEmpty) {
-      final first = backupDocs.first.data();
+    if (sortedDocs.isNotEmpty) {
+      final first = sortedDocs.first.data();
+      final declaredChunks = (first['totalChunks'] as num?)?.toInt() ??
+          (rootData['backupChunks'] as num?)?.toInt();
+      final backupDocs = (declaredChunks != null && declaredChunks > 0)
+          ? sortedDocs.where((d) {
+              final idx = (d.data()['index'] as num?)?.toInt();
+              return idx != null && idx >= 0 && idx < declaredChunks;
+            }).toList()
+          : sortedDocs;
       final isEncrypted = first['encrypted'] == true;
       if (isEncrypted) {
         final pass = (explicitPassphrase != null && explicitPassphrase.trim().isNotEmpty)
@@ -440,10 +473,28 @@ class CloudSyncRepository {
     if (user == null || fs == null) return;
     final uid = user.uid;
 
-    final backupDocs = await fs.collection('users').doc(uid).collection('backup').get();
-    for (final doc in backupDocs.docs) {
-      await doc.reference.delete();
+    Future<void> deleteSubcollection(
+      CollectionReference<Map<String, dynamic>> coll,
+    ) async {
+      try {
+        final snap = await coll.get();
+        for (final doc in snap.docs) {
+          try {
+            await doc.reference.delete();
+          } catch (_) {}
+        }
+      } catch (_) {}
     }
+
+    await deleteSubcollection(fs.collection('users').doc(uid).collection('backup'));
+    await deleteSubcollection(fs.collection('users').doc(uid).collection('friends'));
+    await deleteSubcollection(
+      fs.collection('social_profiles').doc(uid).collection('circle_members'),
+    );
+    await deleteSubcollection(
+      fs.collection('social_profiles').doc(uid).collection('nudges'),
+    );
+
     for (final code in inviteCodes.where((c) => c.trim().isNotEmpty)) {
       try {
         await fs.collection('invite_codes').doc(code).delete();

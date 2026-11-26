@@ -14,6 +14,7 @@ import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/network/image_cache_manager.dart';
+import '../../core/platform/platform_bridge.dart';
 import '../../data/remote/watch_circle_repository.dart';
 import '../../domain/model/drama.dart';
 import '../../domain/model/watch_circle_models.dart';
@@ -58,6 +59,7 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
 
     showIosBottomSheet<void>(
       context: context,
+      disposeAfter: [ctrl],
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
           final c = ctx.colors;
@@ -657,7 +659,10 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
                           sharingEnabled: settings.watchCircleSharingEnabled,
                           topFourDramas: topFourDramas,
                           onCopyCode: (code) {
-                            Clipboard.setData(ClipboardData(text: code));
+                            PlatformBridge.copySensitiveClipboard(
+                              code,
+                              label: 'Watch Circle Code',
+                            );
                             ref
                                 .read(toastProvider.notifier)
                                 .show('Copied Circle Code $code');
@@ -676,8 +681,11 @@ class _WatchCircleScreenState extends ConsumerState<WatchCircleScreen> {
                                   .show(e.toString());
                             }
                           },
-                          onShareCode: (code) => Share.share(
-                            'Join my Moglog Watch Circle! Enter my Circle Code: $code (MOG-$code)',
+                          onShareCode: (code) => SharePlus.instance.share(
+                            ShareParams(
+                              text:
+                                  'Join my Moglog Watch Circle! Enter my Circle Code: $code (MOG-$code)',
+                            ),
                           ),
                           onEnterFriendCode: _showJoinCircleSheet,
                           onToggleSharing: (v) async {

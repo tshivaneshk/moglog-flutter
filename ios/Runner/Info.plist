@@ -20,6 +20,8 @@
 	<string>Moglog uses Face ID to unlock your encrypted library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Moglog lets you choose a custom profile photo from your library.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Moglog saves your Wrapped stats card image to your photo library when requested.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Moglog lets you capture a custom profile photo.</string>
 	<key>CFBundlePackageType</key>

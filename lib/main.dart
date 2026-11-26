@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -6,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'app/app.dart';
 import 'app/providers.dart';
@@ -126,7 +129,16 @@ Future<void> main() async {
     Firebase.initializeApp().then((_) {}).catchError((_) {}),
   ]);
 
-  final dbKeyHex = await secureStore.getOrCreateDatabaseKeyHex();
+  var existingDbOnDisk = false;
+  try {
+    final docDir = await getApplicationDocumentsDirectory();
+    final dbFile = File(p.join(docDir.path, 'drama_db_encrypted.db'));
+    existingDbOnDisk = await dbFile.exists() && await dbFile.length() > 0;
+  } catch (_) {}
+
+  final dbKeyHex = await secureStore.getOrCreateDatabaseKeyHex(
+    existingDbOnDisk: existingDbOnDisk,
+  );
   final appDb = AppDatabase();
   await appDb.open(hexKey: dbKeyHex);
 
@@ -156,6 +168,9 @@ Future<void> main() async {
             androidProvider: kReleaseMode
                 ? AndroidProvider.playIntegrity
                 : AndroidProvider.debug,
+            appleProvider: kReleaseMode
+                ? AppleProvider.appAttestWithDeviceCheckFallback
+                : AppleProvider.debug,
           )
           .catchError((_) {}),
     );

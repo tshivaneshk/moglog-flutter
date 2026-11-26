@@ -51,8 +51,9 @@ android {
                 storePassword = releaseStorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
-                enableV1Signing = true
+                enableV1Signing = false
                 enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
@@ -61,6 +62,9 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (!releaseStoreFilePath.isNullOrBlank() && (releaseStoreFile == null || !releaseStoreFile.exists())) {
+                throw GradleException("RELEASE_STORE_FILE was specified ($releaseStoreFilePath) but does not exist.")
+            }
             val hasReleaseKeystore = releaseStoreFile != null && releaseStoreFile.exists()
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
@@ -89,6 +93,7 @@ kotlin {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.google.crypto.tink:tink-android:1.15.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("net.zetetic:sqlcipher-android:4.10.0")

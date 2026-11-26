@@ -44,9 +44,7 @@ class RecycleBinScreen extends ConsumerWidget {
                       IosPressable(
                         onTap: () async {
                           final ctrl = ref.read(dramaControllerProvider);
-                          for (final d in deletedShows) {
-                            await ctrl.restoreDrama(d);
-                          }
+                          await ctrl.restoreDramasBatch(deletedShows);
                           ref.read(toastProvider.notifier).show(
                                 'Restored ${deletedShows.length} shows to library',
                               );

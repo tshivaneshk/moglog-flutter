@@ -69,7 +69,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _toggleEpisodeReminders(bool enabled) async {
-    if (enabled && Platform.isAndroid) {
+    if (enabled && (Platform.isAndroid || Platform.isIOS)) {
       final status = await Permission.notification.request();
       if (!status.isGranted) {
         ref.read(toastProvider.notifier).show(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../design_system/components.dart';
@@ -25,12 +26,12 @@ class AppLockOverlay extends StatefulWidget {
 class _AppLockOverlayState extends State<AppLockOverlay>
     with WidgetsBindingObserver {
   final LocalAuthentication _localAuth = LocalAuthentication();
+  final Stopwatch _backgroundWatch = Stopwatch();
 
   bool _isLocked = false;
   bool _isBackgroundShielded = false;
   bool _isAuthenticating = false;
   String? _errorMessage;
-  int _backgroundedAtMs = 0;
 
   @override
   void initState() {
@@ -46,27 +47,51 @@ class _AppLockOverlayState extends State<AppLockOverlay>
   void didUpdateWidget(covariant AppLockOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!widget.appLockEnabled && _isLocked) {
-      setState(() => _isLocked = false);
+      _backgroundWatch
+        ..stop()
+        ..reset();
+      setState(() {
+        _isLocked = false;
+        _errorMessage = null;
+      });
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      if (widget.appLockEnabled || widget.hideInRecents) {
+    if (!mounted) return;
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      if ((widget.appLockEnabled || widget.hideInRecents) &&
+          !_isBackgroundShielded) {
         setState(() => _isBackgroundShielded = true);
       }
-      if (state == AppLifecycleState.paused) {
-        _backgroundedAtMs = DateTime.now().millisecondsSinceEpoch;
+      if ((state == AppLifecycleState.paused ||
+              state == AppLifecycleState.hidden) &&
+          widget.appLockEnabled &&
+          !_backgroundWatch.isRunning) {
+        _backgroundWatch
+          ..reset()
+          ..start();
       }
     } else if (state == AppLifecycleState.resumed) {
-      setState(() => _isBackgroundShielded = false);
-      if (widget.appLockEnabled && _backgroundedAtMs > 0) {
-        final elapsedSec =
-            (DateTime.now().millisecondsSinceEpoch - _backgroundedAtMs) ~/ 1000;
-        _backgroundedAtMs = 0;
-        if (elapsedSec >= widget.timeoutSeconds) {
-          setState(() => _isLocked = true);
+      if (_isBackgroundShielded) {
+        setState(() => _isBackgroundShielded = false);
+      }
+      if (widget.appLockEnabled) {
+        if (_backgroundWatch.isRunning) {
+          final elapsedSec = _backgroundWatch.elapsed.inSeconds;
+          _backgroundWatch
+            ..stop()
+            ..reset();
+          if (elapsedSec >= widget.timeoutSeconds) {
+            setState(() => _isLocked = true);
+            _authenticate();
+            return;
+          }
+        }
+        if (_isLocked && !_isAuthenticating) {
           _authenticate();
         }
       }
@@ -82,7 +107,7 @@ class _AppLockOverlayState extends State<AppLockOverlay>
       final isSupported = await _localAuth.isDeviceSupported();
       final canCheck = await _localAuth.canCheckBiometrics;
       if (!isSupported && !canCheck) {
-        // Exact parity: auto-unlock if device has no biometric/PIN credential enrolled
+        // Exact parity: auto-unlock only if device has no biometric/PIN credential enrolled at OS level
         if (mounted) {
           setState(() {
             _isLocked = false;
@@ -102,14 +127,27 @@ class _AppLockOverlayState extends State<AppLockOverlay>
       if (mounted) {
         setState(() {
           _isLocked = !ok;
-          _errorMessage = ok ? null : 'Authentication cancelled. Tap Unlock to retry.';
+          _errorMessage =
+              ok ? null : 'Authentication cancelled. Tap Unlock to retry.';
+        });
+      }
+    } on PlatformException catch (e) {
+      // Fail-closed: NEVER unlock on biometric lockout or platform error
+      if (mounted) {
+        final isLockout =
+            e.code == 'LockedOut' || e.code == 'PermanentlyLockedOut';
+        setState(() {
+          _isLocked = true;
+          _errorMessage = isLockout
+              ? 'Too many failed attempts. Wait briefly or use your device PIN to unlock.'
+              : 'Authentication failed. Tap Unlock to retry.';
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _isLocked = false;
-          _errorMessage = null;
+          _isLocked = true;
+          _errorMessage = 'Authentication failed. Tap Unlock to retry.';
         });
       }
     } finally {

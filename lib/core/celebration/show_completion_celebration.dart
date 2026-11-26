@@ -97,7 +97,7 @@ class _CelebrationBlastOverlayState extends State<CelebrationBlastOverlay>
 
   List<_ConfettiParticle> _buildParticles(int seed) {
     if (seed <= 0) return const [];
-    final rng = Random(seed);
+    final rng = Random.secure();
     return List.generate(85, (_) {
       final angle = (-170.0 + rng.nextDouble() * 160.0) * (pi / 180.0);
       final speed = 450.0 + rng.nextDouble() * 850.0;

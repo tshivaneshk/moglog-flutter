@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -358,18 +359,38 @@ class DramaController {
     }
   }
 
-  void _scheduleDebouncedCloudSync(List<Drama> currentList) {
+  void _scheduleDebouncedCloudSync([List<Drama>? _]) {
     _cloudSyncDebounce?.cancel();
     _cloudSyncDebounce = Timer(const Duration(milliseconds: 320), () async {
+      final freshList = _repo.getAllDramasSync();
       if (_cloud.isSignedIn()) {
         try {
-          await _cloud.syncToCloud(currentList);
+          await _cloud.syncToCloud(freshList);
         } catch (_) {}
       }
       try {
-        await _circle.publishMyActivity(currentList);
+        await _circle.publishMyActivity(freshList);
       } catch (_) {}
     });
+  }
+
+  void _syncImmediateAfterMutation() {
+    _cloudSyncDebounce?.cancel();
+    final freshList = _repo.getAllDramasSync();
+    if (_cloud.isSignedIn()) {
+      unawaited(_cloud.syncToCloud(freshList).catchError((_) {}));
+    }
+    unawaited(_circle.publishMyActivity(freshList).catchError((_) {}));
+  }
+
+  /// Deterministic positive 31-bit ID for CSV rows without TMDB IDs (stable across sessions/devices).
+  static int deterministicTitleId(String title) {
+    final digest = sha256.convert(utf8.encode(title.trim().toLowerCase())).bytes;
+    final raw = ((digest[0] & 0x7F) << 24) |
+        (digest[1] << 16) |
+        (digest[2] << 8) |
+        digest[3];
+    return raw == 0 ? 1 : raw;
   }
 
   Future<void> loadDiscoverRails({bool forceRefresh = false}) async {
@@ -594,29 +615,66 @@ class DramaController {
     }
   }
 
+  void updateDramasStatusBatch(Iterable<int> ids, String status) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final updated = <Drama>[];
+    for (final id in ids) {
+      final existing = _repo.getLocalDramaById(id);
+      if (existing != null) {
+        updated.add(
+          existing.copyWith(
+            status: status,
+            updatedAt: now,
+            completedAt: (status == 'Done' && existing.status != 'Done')
+                ? now
+                : existing.completedAt,
+          ),
+        );
+      }
+    }
+    if (updated.isNotEmpty) {
+      _repo.saveDramasBatch(updated);
+      _scheduleDebouncedCloudSync();
+    }
+  }
+
   Future<void> moveToRecycleBin(Drama drama) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final updated = drama.copyWith(isDeleted: true, deletedAt: now, updatedAt: now);
     _repo.saveDrama(updated);
-    if (_cloud.isSignedIn()) {
-      unawaited(_cloud.syncToCloud(_repo.getAllDramasSync()).catchError((_) {}));
-    }
+    _syncImmediateAfterMutation();
+  }
+
+  Future<void> moveDramasToRecycleBin(List<Drama> dramas) async {
+    if (dramas.isEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final updated = dramas
+        .map((d) => d.copyWith(isDeleted: true, deletedAt: now, updatedAt: now))
+        .toList();
+    _repo.saveDramasBatch(updated);
+    _syncImmediateAfterMutation();
   }
 
   Future<void> restoreDrama(Drama drama) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final updated = drama.copyWith(isDeleted: false, deletedAt: 0, updatedAt: now);
     _repo.saveDrama(updated);
-    if (_cloud.isSignedIn()) {
-      unawaited(_cloud.syncToCloud(_repo.getAllDramasSync()).catchError((_) {}));
-    }
+    _syncImmediateAfterMutation();
+  }
+
+  Future<void> restoreDramasBatch(List<Drama> dramas) async {
+    if (dramas.isEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final updated = dramas
+        .map((d) => d.copyWith(isDeleted: false, deletedAt: 0, updatedAt: now))
+        .toList();
+    _repo.saveDramasBatch(updated);
+    _syncImmediateAfterMutation();
   }
 
   Future<void> deleteDramaPermanently(Drama drama) async {
     _repo.deleteDrama(drama);
-    if (_cloud.isSignedIn()) {
-      unawaited(_cloud.syncToCloud(_repo.getAllDramasSync()).catchError((_) {}));
-    }
+    _syncImmediateAfterMutation();
   }
 
   Future<void> emptyRecycleBin() async {
@@ -624,9 +682,7 @@ class DramaController {
     for (final d in deleted) {
       _repo.deleteDrama(d);
     }
-    if (_cloud.isSignedIn()) {
-      unawaited(_cloud.syncToCloud(_repo.getAllDramasSync()).catchError((_) {}));
-    }
+    _syncImmediateAfterMutation();
   }
 
   Future<bool> toggleTopFourFavorite(int dramaId) async {
@@ -644,13 +700,18 @@ class DramaController {
   Future<void> deleteShelf(String name) async {
     await _settings.removeCustomCollection(name);
     final now = DateTime.now().millisecondsSinceEpoch;
+    final modified = <Drama>[];
     for (final drama in _repo.getAllDramasSync()) {
       if (drama.tagList.any((t) => t.toLowerCase() == name.toLowerCase())) {
         final newTags = drama.tagList
             .where((t) => t.toLowerCase() != name.toLowerCase())
             .join(', ');
-        _repo.saveDrama(drama.copyWith(tags: newTags, updatedAt: now));
+        modified.add(drama.copyWith(tags: newTags, updatedAt: now));
       }
+    }
+    if (modified.isNotEmpty) {
+      _repo.saveDramasBatch(modified);
+      _scheduleDebouncedCloudSync();
     }
     unawaited(_cloud.syncProfileOnly());
   }
@@ -662,14 +723,19 @@ class DramaController {
     }
     await _settings.renameCustomCollection(oldName, cleanNew);
     final now = DateTime.now().millisecondsSinceEpoch;
+    final modified = <Drama>[];
     for (final drama in _repo.getAllDramasSync()) {
       if (drama.tagList.any((t) => t.toLowerCase() == oldName.toLowerCase())) {
         final newTags = drama.tagList
             .map((t) => t.toLowerCase() == oldName.toLowerCase() ? cleanNew : t)
             .toSet()
             .join(', ');
-        _repo.saveDrama(drama.copyWith(tags: newTags, updatedAt: now));
+        modified.add(drama.copyWith(tags: newTags, updatedAt: now));
       }
+    }
+    if (modified.isNotEmpty) {
+      _repo.saveDramasBatch(modified);
+      _scheduleDebouncedCloudSync();
     }
     unawaited(_cloud.syncProfileOnly());
   }
@@ -847,8 +913,9 @@ class DramaController {
       }
     }
 
-    for (final d in toSave) {
-      _repo.saveDrama(d);
+    if (toSave.isNotEmpty) {
+      _repo.saveDramasBatch(toSave);
+      _scheduleDebouncedCloudSync();
     }
 
     final allPosters = toSave
@@ -971,7 +1038,7 @@ class DramaController {
       final finalId = resolved?.id ??
           (item.tmdbId > 0
               ? item.tmdbId
-              : (item.title.toLowerCase().hashCode & 0x7FFFFFFF));
+              : deterministicTitleId(item.title));
       if (finalId <= 0) {
         skipped++;
         continue;
@@ -1013,6 +1080,10 @@ class DramaController {
       _repo.saveDrama(newDrama);
       if (posterUrl.isNotEmpty) savedPosters.add(posterUrl);
       added++;
+    }
+
+    if (added + updated > 0) {
+      _scheduleDebouncedCloudSync();
     }
 
     if (savedPosters.isNotEmpty) {
@@ -1116,6 +1187,7 @@ class AuthController extends StateNotifier<AuthUiState> {
   StreamSubscription<User?>? _authSub;
   int _lastCircleRefreshMs = 0;
   bool _pendingNewFirebaseUser = false;
+  bool _isSigningInWithGoogle = false;
 
   AuthController(this.ref) : super(const AuthUiState()) {
     if (Firebase.apps.isNotEmpty) {
@@ -1144,7 +1216,11 @@ class AuthController extends StateNotifier<AuthUiState> {
         ref.read(dramaControllerProvider).ensureRealtimeListenerStarted();
         if (user != null) {
           Future<void>.delayed(const Duration(milliseconds: 350), () {
-            if (!mounted || state.pendingCreateAccountPrompt) return;
+            if (!mounted ||
+                _isSigningInWithGoogle ||
+                state.pendingCreateAccountPrompt) {
+              return;
+            }
             ref.read(watchCircleRepositoryProvider).startListeningForCircleMembers(
               onMemberChanged: () {
                 unawaited(refreshWatchCircle(forceRefresh: true));
@@ -1176,7 +1252,9 @@ class AuthController extends StateNotifier<AuthUiState> {
 
   Future<String?> signInWithGoogle() async {
     if (Firebase.apps.isEmpty) {
-      return 'Firebase is not yet configured for com.skech.moglog. Add google-services.json to enable Google Cloud Sync.';
+      final configName =
+          Platform.isIOS ? 'GoogleService-Info.plist' : 'google-services.json';
+      return 'Firebase is not yet configured for com.skech.moglog. Add $configName to enable Google Cloud Sync.';
     }
     if (!await isOnline()) {
       return 'Offline: Connect to the internet to sign in.';
@@ -1190,19 +1268,30 @@ class AuthController extends StateNotifier<AuthUiState> {
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      final userCred = await FirebaseAuth.instance.signInWithCredential(cred);
-      final user = userCred.user;
-      if (user == null) return 'Google Sign-In failed.';
+      _isSigningInWithGoogle = true;
+      try {
+        final userCred = await FirebaseAuth.instance.signInWithCredential(cred);
+        final user = userCred.user;
+        if (user == null) return 'Google Sign-In failed.';
 
-      final exists = await _cloud.checkAccountExists(user.uid);
-      if (!exists) {
-        _pendingNewFirebaseUser = userCred.additionalUserInfo?.isNewUser ?? false;
-        state = state.copyWith(user: user, pendingCreateAccountPrompt: true);
-      } else {
-        _pendingNewFirebaseUser = false;
-        state = state.copyWith(user: user, pendingCreateAccountPrompt: false);
-        unawaited(fetchFromCloud().catchError((_) => null));
-        unawaited(refreshWatchCircle());
+        final exists = await _cloud.checkAccountExists(user.uid);
+        if (!exists) {
+          _pendingNewFirebaseUser =
+              userCred.additionalUserInfo?.isNewUser ?? false;
+          state = state.copyWith(user: user, pendingCreateAccountPrompt: true);
+        } else {
+          _pendingNewFirebaseUser = false;
+          state = state.copyWith(user: user, pendingCreateAccountPrompt: false);
+          _circle.startListeningForCircleMembers(
+            onMemberChanged: () {
+              unawaited(refreshWatchCircle(forceRefresh: true));
+            },
+          );
+          unawaited(fetchFromCloud().catchError((_) => null));
+          unawaited(refreshWatchCircle());
+        }
+      } finally {
+        _isSigningInWithGoogle = false;
       }
       return null;
     } catch (e) {

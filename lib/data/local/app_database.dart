@@ -39,12 +39,19 @@ class AppDatabase {
     yield* _dramasController.stream;
   }
 
+  static final RegExp _hexKeyPattern = RegExp(r'^[0-9a-fA-F]{64}$');
+
   /// Opens the encrypted SQLCipher database on Android/iOS (or unencrypted in-memory in tests).
   Future<void> open({required String hexKey, bool inMemory = false}) async {
     if (_db != null) return;
     if (inMemory) {
       _db = sqlite3.openInMemory();
     } else {
+      final useSqlCipher = Platform.isAndroid || Platform.isIOS;
+      final cleanKey = hexKey.trim();
+      if (useSqlCipher && !_hexKeyPattern.hasMatch(cleanKey)) {
+        throw ArgumentError('SQLCipher key must be a 64-character hex string.');
+      }
       if (Platform.isAndroid) {
         sqlite_open.open.overrideFor(
           sqlite_open.OperatingSystem.android,
@@ -54,8 +61,16 @@ class AppDatabase {
       final dir = await getApplicationDocumentsDirectory();
       final dbPath = p.join(dir.path, 'drama_db_encrypted.db');
       _db = sqlite3.open(dbPath);
-      if (Platform.isAndroid && hexKey.isNotEmpty) {
-        _db!.execute("PRAGMA key = \"x'$hexKey'\";");
+      if (useSqlCipher) {
+        try {
+          _db!.execute("PRAGMA key = \"x'$cleanKey'\";");
+          _db!.execute('PRAGMA cipher_memory_security = ON;');
+          _db!.select('SELECT count(*) FROM sqlite_master;');
+        } catch (e) {
+          _db?.dispose();
+          _db = null;
+          rethrow;
+        }
       }
     }
     _createTables();

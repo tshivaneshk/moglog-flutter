@@ -269,10 +269,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           ActionSheetItem(
             label: st,
             onTap: () {
-              final ctrl = ref.read(dramaControllerProvider);
-              for (final id in ids) {
-                ctrl.updateDramaStatus(id, st);
-              }
+              ref
+                  .read(dramaControllerProvider)
+                  .updateDramasStatusBatch(ids, st);
               _exitMultiSelect();
               ref.read(toastProvider.notifier).show(
                 'Updated ${ids.length} shows to $st',
@@ -287,17 +286,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final ids = Set<int>.from(_selectedIds);
     final targets = allDramas.where((d) => ids.contains(d.id)).toList();
     final ctrl = ref.read(dramaControllerProvider);
-    for (final d in targets) {
-      ctrl.moveToRecycleBin(d);
-    }
+    ctrl.moveDramasToRecycleBin(targets);
     _exitMultiSelect();
     ref.read(toastProvider.notifier).show(
       'Moved ${targets.length} shows to Recycle Bin',
       actionLabel: 'Undo',
       onAction: () {
-        for (final d in targets) {
-          ctrl.restoreDrama(d);
-        }
+        ctrl.restoreDramasBatch(targets);
       },
     );
   }
@@ -319,10 +314,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       },
       onIncrementEpisode: () => ctrl.incrementEpisodeQuick(drama),
       onShare: () {
-        Share.share(
-          buildShowShareText(
-            drama: drama,
-            isInLibrary: true,
+        SharePlus.instance.share(
+          ShareParams(
+            text: buildShowShareText(
+              drama: drama,
+              isInLibrary: true,
+            ),
           ),
         );
       },
@@ -575,7 +572,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     tint: c.accent,
                     onTap: () {
                       final pick =
-                          randomPool[Random().nextInt(randomPool.length)];
+                          randomPool[Random.secure().nextInt(randomPool.length)];
                       ref.read(toastProvider.notifier).show(
                         'Random pick: "${pick.title}"',
                       );

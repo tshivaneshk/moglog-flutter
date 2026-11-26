@@ -91,9 +91,18 @@ class NotificationService {
     if (payload == null || payload.isEmpty) return;
     try {
       final map = jsonDecode(payload) as Map<String, dynamic>;
-      final dramaId = (map['open_drama_id'] as num?)?.toInt();
-      final target = map['navigate_to'] as String?;
-      _tapController.add(NotificationTapEvent(dramaId: dramaId, navigateTo: target));
+      final rawId = (map['open_drama_id'] as num?)?.toInt();
+      final dramaId = (rawId != null && rawId > 0) ? rawId : null;
+      final rawTarget = map['navigate_to'];
+      final target =
+          (rawTarget is String && rawTarget.trim() == 'watch_circle')
+              ? 'watch_circle'
+              : null;
+      if (dramaId != null || target != null) {
+        _tapController.add(
+          NotificationTapEvent(dramaId: dramaId, navigateTo: target),
+        );
+      }
     } catch (_) {}
   }
 
@@ -112,15 +121,22 @@ class NotificationService {
       drama.overview.isNotEmpty ? '$body\n${drama.overview}' : body,
     );
 
-    if (drama.posterPath.isNotEmpty) {
+    if (Platform.isAndroid &&
+        drama.posterPath.startsWith('https://image.tmdb.org/')) {
       try {
         final tempDir = await getTemporaryDirectory();
         final filePath = '${tempDir.path}/notif_poster_${drama.id}.jpg';
-        final response = await Dio().get<List<int>>(
+        final response = await Dio(
+          BaseOptions(
+            connectTimeout: const Duration(seconds: 6),
+            receiveTimeout: const Duration(seconds: 6),
+            followRedirects: false,
+          ),
+        ).get<List<int>>(
           drama.posterPath,
           options: Options(responseType: ResponseType.bytes),
         );
-        if (response.data != null) {
+        if (response.data != null && response.data!.length <= 2 * 1024 * 1024) {
           final file = File(filePath);
           await file.writeAsBytes(response.data!);
           styleInfo = BigPictureStyleInformation(
@@ -149,13 +165,18 @@ class NotificationService {
         ),
       ],
     );
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
 
     try {
       await _plugin.show(
         drama.id,
         title,
         body,
-        NotificationDetails(android: androidDetails),
+        NotificationDetails(android: androidDetails, iOS: iosDetails),
         payload: jsonEncode({'open_drama_id': drama.id}),
       );
     } catch (_) {}
@@ -179,12 +200,17 @@ class NotificationService {
         '$friendName connected with your Watch Circle code. Tap to check their watching progress and compare your Taste Blend.',
       ),
     );
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
     try {
       await _plugin.show(
         friendUid.hashCode & 0x7FFFFFFF,
         'New Watch Circle Friend',
         '$friendName added you to their Watch Circle.',
-        NotificationDetails(android: androidDetails),
+        NotificationDetails(android: androidDetails, iOS: iosDetails),
         payload: jsonEncode({'navigate_to': 'watch_circle'}),
       );
     } catch (_) {}

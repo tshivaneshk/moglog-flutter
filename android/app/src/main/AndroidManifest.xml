@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Strip deprecated API<28 fingerprint permission & unused foreground service permission -->
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
 
     <!-- Curated streaming app visibility (exact parity with Kotlin Moglog) -->
     <queries>
@@ -70,12 +73,21 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Remove debug/benchmark-only exported receivers merged from AndroidX libraries -->
+        <!-- Remove debug/benchmark-only exported receivers & unused exported Firebase web-auth activities -->
         <receiver
             android:name="androidx.work.impl.diagnostics.DiagnosticsReceiver"
             tools:node="remove" />
         <receiver
             android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            tools:node="remove" />
+        <activity
+            android:name="com.google.firebase.auth.internal.GenericIdpActivity"
+            tools:node="remove" />
+        <activity
+            android:name="com.google.firebase.auth.internal.RecaptchaActivity"
+            tools:node="remove" />
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
             tools:node="remove" />
     </application>
 </manifest>

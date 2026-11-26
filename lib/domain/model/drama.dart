@@ -4,9 +4,13 @@ import 'dart:math';
 String normalizePosterUrl(String? raw) {
   final s = (raw ?? '').trim();
   if (s.isEmpty) return '';
-  if (s.startsWith('https://')) return s;
-  if (s.startsWith('http://')) return 'https://${s.substring(7)}';
+  final lower = s.toLowerCase();
+  if (lower.startsWith('https://')) return 'https://${s.substring(8)}';
+  if (lower.startsWith('http://')) return 'https://${s.substring(7)}';
   if (s.startsWith('//')) return 'https:$s';
+  if (s.contains('://') || lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('file:')) {
+    return '';
+  }
   if (s.startsWith('/')) return 'https://image.tmdb.org/t/p/w500$s';
   return 'https://image.tmdb.org/t/p/w500/$s';
 }

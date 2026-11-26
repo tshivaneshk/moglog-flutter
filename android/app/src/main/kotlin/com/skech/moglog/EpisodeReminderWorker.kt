@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -22,6 +23,7 @@ import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -148,18 +150,54 @@ class EpisodeReminderWorker(
             }
         }
 
+        private const val MAX_POSTER_BYTES = 2 * 1024 * 1024 // 2 MB cap
+
         private suspend fun loadPosterBitmap(posterUrl: String): Bitmap? {
-            if (posterUrl.isBlank()) return null
+            val cleanUrl = posterUrl.trim()
+            if (cleanUrl.isEmpty()) return null
+            val parsed = runCatching { Uri.parse(cleanUrl) }.getOrNull() ?: return null
+            val scheme = parsed.scheme?.lowercase()
+            val host = parsed.host?.lowercase()
+            if (scheme != "https" || host != "image.tmdb.org") return null
+
             return withContext(Dispatchers.IO) {
+                var conn: HttpURLConnection? = null
                 try {
-                    val conn = URL(posterUrl).openConnection() as HttpURLConnection
+                    conn = (URL(cleanUrl).openConnection() as? HttpURLConnection) ?: return@withContext null
+                    conn.instanceFollowRedirects = false
                     conn.connectTimeout = 6000
                     conn.readTimeout = 6000
-                    conn.inputStream.use { stream ->
-                        BitmapFactory.decodeStream(stream)
+                    if (conn.responseCode != HttpURLConnection.HTTP_OK) return@withContext null
+                    val contentLen = conn.contentLength
+                    if (contentLen > MAX_POSTER_BYTES) return@withContext null
+
+                    val bytes = conn.inputStream.use { stream ->
+                        val out = ByteArrayOutputStream()
+                        val buf = ByteArray(8192)
+                        var total = 0
+                        while (true) {
+                            val n = stream.read(buf)
+                            if (n <= 0) break
+                            total += n
+                            if (total > MAX_POSTER_BYTES) return@withContext null
+                            out.write(buf, 0, n)
+                        }
+                        out.toByteArray()
                     }
+                    if (bytes.isEmpty()) return@withContext null
+
+                    val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOpts)
+                    var sampleSize = 1
+                    while (boundsOpts.outWidth / sampleSize > 720 || boundsOpts.outHeight / sampleSize > 1080) {
+                        sampleSize *= 2
+                    }
+                    val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
                 } catch (_: Exception) {
                     null
+                } finally {
+                    runCatching { conn?.disconnect() }
                 }
             }
         }
