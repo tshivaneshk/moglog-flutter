@@ -110,69 +110,98 @@ class IosLargeTitleHeader extends StatelessWidget {
             children: [
               SizedBox(
                 height: (isLandscape || isCompactWindow) ? 40 : 44,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    if (leadingActions != null)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: leadingActions!,
-                      ),
-                    if (inlineNoLeading)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            right: trailingCount > 0
-                                ? (trailingCount * 42.0)
-                                : 0.0,
+                child: leadingActions == null
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: inlineNoLeading
+                                ? Text(
+                                    title,
+                                    style: (size.width < 300
+                                            ? t.headline
+                                            : t.title3)
+                                        .copyWith(color: c.label),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : AnimatedOpacity(
+                                    opacity: effectiveCollapsed ? 1.0 : 0.0,
+                                    duration: const Duration(milliseconds: 140),
+                                    child: IgnorePointer(
+                                      ignoring: !effectiveCollapsed,
+                                      child: Text(
+                                        title,
+                                        textAlign: TextAlign.start,
+                                        style: t.title3.copyWith(color: c.label),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
                           ),
-                          child: Text(
-                            title,
-                            style: (size.width < 300 ? t.headline : t.title3)
-                                .copyWith(color: c.label),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                          if (trailingActions != null &&
+                              trailingActions!.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (var i = 0;
+                                    i < trailingActions!.length;
+                                    i++) ...[
+                                  if (i > 0)
+                                    SizedBox(width: size.width < 320 ? 4 : 6),
+                                  trailingActions![i],
+                                ],
+                              ],
+                            ),
+                          ],
+                        ],
                       )
-                    else
-                      AnimatedOpacity(
-                        opacity: effectiveCollapsed ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 140),
-                        child: IgnorePointer(
-                          ignoring: !effectiveCollapsed,
-                          child: Padding(
-                            padding:
-                                EdgeInsets.symmetric(horizontal: safeCenterPad),
-                            child: Text(
-                              title,
-                              textAlign: TextAlign.center,
-                              style: t.headline.copyWith(color: c.label),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                    : Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: leadingActions!,
+                          ),
+                          AnimatedOpacity(
+                            opacity: effectiveCollapsed ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 140),
+                            child: IgnorePointer(
+                              ignoring: !effectiveCollapsed,
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: safeCenterPad,
+                                ),
+                                child: Text(
+                                  title,
+                                  textAlign: TextAlign.center,
+                                  style: t.headline.copyWith(color: c.label),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                          if (trailingActions != null &&
+                              trailingActions!.isNotEmpty)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (var i = 0;
+                                      i < trailingActions!.length;
+                                      i++) ...[
+                                    if (i > 0)
+                                      SizedBox(width: size.width < 320 ? 4 : 6),
+                                    trailingActions![i],
+                                  ],
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
-                    if (trailingActions != null && trailingActions!.isNotEmpty)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            for (var i = 0;
-                                i < trailingActions!.length;
-                                i++) ...[
-                              if (i > 0)
-                                SizedBox(width: size.width < 320 ? 6 : 8),
-                              trailingActions![i],
-                            ],
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
               ),
               AnimatedSize(
                 duration: const Duration(milliseconds: 150),
