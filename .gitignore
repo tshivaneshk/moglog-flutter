@@ -55,3 +55,6 @@ key.properties
 *.jks
 *.keystore
 *.p12
+
+# iOS Firebase config (keep out of git)
+GoogleService-Info.plist

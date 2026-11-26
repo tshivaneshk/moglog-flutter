@@ -1,0 +1,52 @@
+name: Build iOS Unsigned IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build Unsigned IPA
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Restore GoogleService-Info.plist (from secret)
+        env:
+          GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
+            mkdir -p ios/Runner
+            echo "$GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > ios/Runner/GoogleService-Info.plist
+            echo "Restored GoogleService-Info.plist from secret."
+          else
+            echo "No GOOGLE_SERVICE_INFO_PLIST_BASE64 secret configured; using repo file if present."
+          fi
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+          cd ios && pod install && cd ..
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package Unsigned IPA
+        run: |
+          mkdir -p build/ios/ipa/Payload
+          cp -r build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          cd build/ios/ipa
+          zip -r -q Moglog-unsigned.ipa Payload
+
+      - name: Upload Unsigned IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Moglog-unsigned-ipa
+          path: build/ios/ipa/Moglog-unsigned.ipa
