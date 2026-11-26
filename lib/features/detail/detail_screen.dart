@@ -827,6 +827,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 
         // Personal Rating & Audience / Google Reviews
         RatingAndNotesCard(
+          dramaId: drama.id,
           dramaTitle: drama.title,
           myRating: drama.myRating,
           reviews: _extra?.reviews ?? const [],

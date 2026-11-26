@@ -12,6 +12,7 @@ import '../../../domain/model/drama_extra_details.dart';
 /// Native Personal Rating (0-10 in 0.5 increments) and Audience / Google Reviews card.
 /// Matches Kotlin `RatingAndNotesCard` 1:1 (no personal notes or personal tags UI).
 class RatingAndNotesCard extends StatefulWidget {
+  final int dramaId;
   final String dramaTitle;
   final double myRating;
   final List<DramaReview> reviews;
@@ -20,6 +21,7 @@ class RatingAndNotesCard extends StatefulWidget {
 
   const RatingAndNotesCard({
     super.key,
+    required this.dramaId,
     required this.dramaTitle,
     required this.myRating,
     required this.reviews,
@@ -41,6 +43,17 @@ class _RatingAndNotesCardState extends State<RatingAndNotesCard> {
     );
     launchUrl(
       Uri.parse('https://www.google.com/search?q=$q'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
+  void _openTmdbReviews() {
+    MoglogHaptics.selectionChanged();
+    final url = widget.dramaId > 0
+        ? 'https://www.themoviedb.org/tv/${widget.dramaId}/reviews'
+        : 'https://www.themoviedb.org/';
+    launchUrl(
+      Uri.parse(url),
       mode: LaunchMode.externalApplication,
     );
   }
@@ -258,6 +271,44 @@ class _RatingAndNotesCardState extends State<RatingAndNotesCard> {
                         },
                       ),
                     ],
+                    const SizedBox(height: 12),
+                    IosPressable(
+                      onTap: _openTmdbReviews,
+                      hapticOnTap: true,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 11,
+                        ),
+                        decoration: BoxDecoration(
+                          color: c.tertiaryBackground,
+                          borderRadius: MoglogShapes.control,
+                          border: Border.all(
+                            color: widget.accentColor.withValues(alpha: 0.35),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Open in TMDB',
+                              style: t.footnote.copyWith(
+                                color: widget.accentColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(
+                              MoglogIcons.externalLink,
+                              size: 13,
+                              color: widget.accentColor,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
             ],
@@ -285,7 +336,10 @@ class _ReviewTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
-    final isLong = review.content.length > 200;
+    final contentStyle = t.footnote.copyWith(
+      color: c.label.withValues(alpha: 0.9),
+      height: 1.4,
+    );
 
     return AnimatedSize(
       duration: const Duration(milliseconds: 220),
@@ -370,55 +424,45 @@ class _ReviewTile extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              review.content,
-              maxLines: expanded ? null : 4,
-              overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-              style: t.footnote.copyWith(
-                color: c.label.withValues(alpha: 0.9),
-                height: 1.4,
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final textDirection = Directionality.of(context);
+                final textScaler = MediaQuery.textScalerOf(context);
+                final tp = TextPainter(
+                  text: TextSpan(text: review.content, style: contentStyle),
+                  maxLines: 4,
+                  textDirection: textDirection,
+                  textScaler: textScaler,
+                )..layout(maxWidth: constraints.maxWidth);
+                final exceeds = tp.didExceedMaxLines;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      review.content,
+                      maxLines: expanded ? null : 4,
+                      overflow:
+                          expanded ? TextOverflow.visible : TextOverflow.clip,
+                      style: contentStyle,
+                    ),
+                    if (exceeds || expanded) ...[
+                      const SizedBox(height: 6),
+                      IosPressable(
+                        onTap: onToggle,
+                        child: Text(
+                          expanded ? 'Show less' : 'View more',
+                          style: t.caption.copyWith(
+                            color: accentColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
-            if (isLong) ...[
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IosPressable(
-                    onTap: onToggle,
-                    child: Text(
-                      expanded ? 'Show less' : 'Read more',
-                      style: t.caption.copyWith(
-                        color: accentColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  if ((review.url ?? '').isNotEmpty)
-                    IosPressable(
-                      onTap: () => launchUrl(
-                        Uri.parse(review.url!),
-                        mode: LaunchMode.externalApplication,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'TMDB',
-                            style: t.caption.copyWith(color: c.secondaryLabel),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(
-                            MoglogIcons.externalLink,
-                            size: 10,
-                            color: c.secondaryLabel,
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ],
           ],
         ),
       ),
