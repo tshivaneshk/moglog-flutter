@@ -31,10 +31,10 @@ class MoglogMotion {
 
 /// Shared layout & floating glass shell metrics.
 class MoglogLayout {
-  static const double tabBarHeight = 64.0;
-  static const double tabBarCompactHeight = 56.0;
-  static const double tabBarHorizontalMargin = 16.0;
-  static const double tabBarBottomMargin = 12.0;
+  static const double tabBarHeight = 56.0;
+  static const double tabBarCompactHeight = 54.0;
+  static const double tabBarHorizontalMargin = 18.0;
+  static const double tabBarBottomMargin = 10.0;
   static const double minTouchTarget = 48.0;
 
   static double effectiveTabBarHeight(BuildContext context) {

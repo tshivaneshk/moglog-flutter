@@ -54,6 +54,15 @@ class RatingAndNotesCard extends StatefulWidget {
 
 class _RatingAndNotesCardState extends State<RatingAndNotesCard> {
   final Set<String> _expandedReviewIds = {};
+  double? _draggingRating;
+
+  @override
+  void didUpdateWidget(covariant RatingAndNotesCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.myRating != widget.myRating) {
+      _draggingRating = null;
+    }
+  }
 
   void _openGoogleReviews() {
     MoglogHaptics.selectionChanged();
@@ -341,6 +350,7 @@ class _RatingAndNotesCardState extends State<RatingAndNotesCard> {
         ? HSLColor.fromColor(widget.accentColor).withLightness(0.32).toColor()
         : widget.accentColor;
     final myComment = _myComment;
+    final displayRating = (_draggingRating ?? widget.myRating).clamp(0.0, 10.0);
     final hasAnyReviews =
         widget.communityComments.isNotEmpty || widget.reviews.isNotEmpty;
 
@@ -377,22 +387,23 @@ class _RatingAndNotesCardState extends State<RatingAndNotesCard> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        widget.myRating > 0
-                            ? '${widget.myRating.toStringAsFixed(1)} / 10'
+                        displayRating > 0
+                            ? '${displayRating.toStringAsFixed(1)} / 10'
                             : 'Not rated',
                         style: t.callout.copyWith(
-                          color: widget.myRating > 0
+                          color: displayRating > 0
                               ? readableAccent
                               : c.secondaryLabel,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      if (widget.myRating > 0) ...[
+                      if (displayRating > 0) ...[
                         const SizedBox(width: 8),
                         IosPressable(
                           semanticLabel: 'Clear rating',
                           onTap: () {
                             MoglogHaptics.tickMinus();
+                            setState(() => _draggingRating = null);
                             widget.onRatingChanged(0.0);
                           },
                           child: Padding(
@@ -421,17 +432,24 @@ class _RatingAndNotesCardState extends State<RatingAndNotesCard> {
                   inactiveTrackColor: c.tertiaryBackground,
                   thumbColor: c.onMedia,
                   overlayColor: widget.accentColor.withValues(alpha: 0.18),
+                  showValueIndicator: ShowValueIndicator.never,
                 ),
                 child: Slider(
-                  value: widget.myRating.clamp(0.0, 10.0),
+                  value: displayRating,
                   min: 0.0,
                   max: 10.0,
                   divisions: 20,
-                  label: widget.myRating.toStringAsFixed(1),
                   onChanged: (v) {
                     final rounded = (v * 2).round() / 2.0;
-                    if (rounded != widget.myRating) {
+                    if (rounded != displayRating) {
                       MoglogHaptics.selectionChanged();
+                      setState(() => _draggingRating = rounded);
+                    }
+                  },
+                  onChangeEnd: (v) {
+                    final rounded = (v * 2).round() / 2.0;
+                    setState(() => _draggingRating = null);
+                    if (rounded != widget.myRating) {
                       widget.onRatingChanged(rounded);
                     }
                   },
@@ -594,7 +612,6 @@ class _RatingAndNotesCardState extends State<RatingAndNotesCard> {
               const SizedBox(height: 12),
               IosPrimaryButton(
                 text: myComment != null ? 'Edit Your Review' : 'Write a Review',
-                leadingIcon: MoglogIcons.note,
                 size: MoglogButtonSize.medium,
                 backgroundColor: widget.accentColor,
                 onTap: () => _openReviewComposer(existing: myComment),

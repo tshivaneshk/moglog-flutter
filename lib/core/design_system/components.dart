@@ -120,17 +120,42 @@ class IosLargeTitleHeader extends StatelessWidget {
             children: [
               ConstrainedBox(
                 constraints: BoxConstraints(minHeight: minBarHeight),
-                child: inlineCompactNoLeading
+                child: (inlineCompactNoLeading || leadingActions == null)
                     ? Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              title,
-                              style: (size.width < 300 ? t.headline : t.title3)
-                                  .copyWith(color: c.label),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            child: inlineCompactNoLeading
+                                ? Text(
+                                    title,
+                                    style:
+                                        (size.width < 300 ? t.headline : t.title3)
+                                            .copyWith(color: c.label),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : AnimatedOpacity(
+                                    opacity: effectiveCollapsed ? 1.0 : 0.0,
+                                    duration: reduceMotion
+                                        ? Duration.zero
+                                        : const Duration(milliseconds: 160),
+                                    curve: MoglogMotion.curve,
+                                    child: IgnorePointer(
+                                      ignoring: !effectiveCollapsed,
+                                      child: ExcludeSemantics(
+                                        excluding: !effectiveCollapsed,
+                                        child: Text(
+                                          title,
+                                          textAlign: TextAlign.start,
+                                          style: t.title3.copyWith(
+                                            color: c.label,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                           ),
                           if (trailingActions != null &&
                               trailingActions!.isNotEmpty) ...[
@@ -1237,9 +1262,9 @@ class _IosSearchBarState extends State<IosSearchBar> {
 }
 
 enum MoglogButtonSize {
-  large(50, MoglogShapes.buttonRadius, 18),
-  medium(44, MoglogShapes.buttonRadius, 16),
-  small(36, MoglogShapes.buttonSmallRadius, 12);
+  large(44, MoglogShapes.buttonRadius, 16),
+  medium(38, MoglogShapes.buttonRadius, 14),
+  small(32, MoglogShapes.buttonSmallRadius, 10);
 
   final double minHeight;
   final double cornerRadius;
@@ -2227,69 +2252,74 @@ class IosToastBanner extends StatelessWidget {
     final t = context.typo;
     return Semantics(
       liveRegion: true,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(c.cardSheenTop, c.elevatedSurface),
-            borderRadius: MoglogShapes.pill,
-            border: Border.all(color: c.glassBorder, width: c.hairlineWidth),
-            boxShadow: [
-              BoxShadow(
-                color: c.tabShadow,
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: onAction != null ? 6 : 11,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    message,
-                    style: t.footnote.copyWith(
-                      color: c.label,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(c.cardSheenTop, c.elevatedSurface),
+              borderRadius: MoglogShapes.pill,
+              border: Border.all(color: c.glassBorder, width: c.hairlineWidth),
+              boxShadow: [
+                BoxShadow(
+                  color: c.tabShadow,
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
-                if (actionLabel != null && onAction != null) ...[
-                  const SizedBox(width: 10),
-                  IosPressable(
-                    onTap: onAction,
-                    hapticOnTap: true,
-                    focusRadius: MoglogShapes.pillRadius,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        minWidth: 48,
-                        minHeight: 38,
+              ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: onAction != null ? 6 : 11,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      message,
+                      style: t.footnote.copyWith(
+                        color: c.label,
+                        fontWeight: FontWeight.w500,
+                        decoration: TextDecoration.none,
                       ),
-                      child: Center(
-                        widthFactor: 1.0,
-                        heightFactor: 1.0,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            actionLabel!,
-                            style: t.footnote.copyWith(
-                              color: c.accentText,
-                              fontWeight: FontWeight.w700,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (actionLabel != null && onAction != null) ...[
+                    const SizedBox(width: 10),
+                    IosPressable(
+                      onTap: onAction,
+                      hapticOnTap: true,
+                      focusRadius: MoglogShapes.pillRadius,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 38,
+                        ),
+                        child: Center(
+                          widthFactor: 1.0,
+                          heightFactor: 1.0,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              actionLabel!,
+                              style: t.footnote.copyWith(
+                                color: c.accentText,
+                                fontWeight: FontWeight.w700,
+                                decoration: TextDecoration.none,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

@@ -182,7 +182,7 @@ class IosBottomTabBar extends StatelessWidget {
     Widget capsuleInterior = SizedBox(
       height: capsuleHeight,
       child: Padding(
-        padding: const EdgeInsets.all(4),
+        padding: const EdgeInsets.all(3),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final tabCount = kMoglogMainTabs.length;

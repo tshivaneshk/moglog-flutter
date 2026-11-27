@@ -282,83 +282,102 @@ class ProgressStepperCard extends StatelessWidget {
                   color: c.separator,
                 ),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: (resolvedSeasons.isNotEmpty
-                          ? resolvedSeasons.map((s) => s.seasonNumber).toList()
-                          : List<int>.generate(
-                              min(seasonCount, 20),
-                              (i) => i + 1,
-                            ))
-                      .map((sNum) {
-                    final isSelected = currentSeason == sNum;
-                    final sOffset = resolvedSeasons
-                        .where((s) => s.seasonNumber < sNum)
-                        .fold<int>(0, (sum, s) => sum + s.episodeCount);
-                    final sCount = resolvedSeasons
-                            .where((s) => s.seasonNumber == sNum)
-                            .firstOrNull
-                            ?.episodeCount ??
-                        0;
-                    final isSeasonDone =
-                        sCount > 0 && episodesWatched >= (sOffset + sCount);
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: (resolvedSeasons.isNotEmpty
+                            ? resolvedSeasons.map((s) => s.seasonNumber).toList()
+                            : List<int>.generate(
+                                min(seasonCount, 20),
+                                (i) => i + 1,
+                              ))
+                        .asMap()
+                        .entries
+                        .map((entry) {
+                      final idx = entry.key;
+                      final sNum = entry.value;
+                      final isSelected = currentSeason == sNum;
+                      final sOffset = resolvedSeasons
+                          .where((s) => s.seasonNumber < sNum)
+                          .fold<int>(0, (sum, s) => sum + s.episodeCount);
+                      final sCount = resolvedSeasons
+                              .where((s) => s.seasonNumber == sNum)
+                              .firstOrNull
+                              ?.episodeCount ??
+                          0;
+                      final isSeasonDone =
+                          sCount > 0 && episodesWatched >= (sOffset + sCount);
 
-                    return IosPressable(
-                      semanticSelected: isSelected,
-                      semanticLabel: isSeasonDone
-                          ? 'Season $sNum, completed'
-                          : 'Season $sNum',
-                      onTap: () {
-                        MoglogHaptics.selectionChanged();
-                        onSeasonChange(sNum);
-                      },
-                      child: ConstrainedBox(
-                        constraints:
-                            const BoxConstraints(minWidth: 44, minHeight: 34),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 11,
-                            vertical: 6,
-                          ),
-                          decoration: ShapeDecoration(
-                            color: isSelected
-                                ? accentColor
-                                : (isSeasonDone
-                                    ? accentColor.withValues(alpha: 0.15)
-                                    : c.tertiaryBackground),
-                            shape: MoglogShapes.smooth(
-                              9,
-                              side: (!isSelected && isSeasonDone)
-                                  ? BorderSide(
-                                      color:
-                                          accentColor.withValues(alpha: 0.55),
-                                      width: 1,
-                                    )
-                                  : BorderSide(
-                                      color: c.glassBorder,
-                                      width: c.hairlineWidth,
-                                    ),
+                      return Padding(
+                        padding: EdgeInsets.only(left: idx == 0 ? 0 : 8),
+                        child: IosPressable(
+                          semanticSelected: isSelected,
+                          semanticLabel: isSeasonDone
+                              ? 'Season $sNum, completed'
+                              : 'Season $sNum',
+                          onTap: () {
+                            MoglogHaptics.selectionChanged();
+                            onSeasonChange(sNum);
+                          },
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minWidth: 38,
+                              minHeight: 30,
                             ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            isSeasonDone ? '✓ S$sNum' : 'S$sNum',
-                            style: t.caption.copyWith(
-                              fontWeight: (isSelected || isSeasonDone)
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: isSelected
-                                  ? onAccentSafe
-                                  : (isSeasonDone
-                                      ? readableAccent
-                                      : c.secondaryLabel),
+                            child: DecoratedBox(
+                              decoration: ShapeDecoration(
+                                color: isSelected
+                                    ? accentColor
+                                    : (isSeasonDone
+                                        ? accentColor.withValues(alpha: 0.15)
+                                        : c.tertiaryBackground),
+                                shape: MoglogShapes.smooth(
+                                  9,
+                                  side: (!isSelected && isSeasonDone)
+                                      ? BorderSide(
+                                          color: accentColor.withValues(
+                                            alpha: 0.55,
+                                          ),
+                                          width: 1,
+                                        )
+                                      : BorderSide(
+                                          color: c.glassBorder,
+                                          width: c.hairlineWidth,
+                                        ),
+                                ),
+                              ),
+                              child: Center(
+                                widthFactor: 1.0,
+                                heightFactor: 1.0,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  child: Text(
+                                    isSeasonDone ? '✓ S$sNum' : 'S$sNum',
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    style: t.caption.copyWith(
+                                      fontWeight: (isSelected || isSeasonDone)
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                      color: isSelected
+                                          ? onAccentSafe
+                                          : (isSeasonDone
+                                              ? readableAccent
+                                              : c.secondaryLabel),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ],
               if ((nextEpisodeAirDate ?? '').trim().isNotEmpty) ...[
