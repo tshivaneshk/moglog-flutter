@@ -13,6 +13,7 @@ import '../../core/design_system/components.dart';
 import '../../core/design_system/icons.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/design_system/tokens.dart';
 import '../../core/security/backup_crypto_envelope.dart';
 import '../../core/security/secure_store.dart';
 
@@ -33,6 +34,30 @@ class AdvancedSettingsScreen extends ConsumerStatefulWidget {
 
 class _AdvancedSettingsScreenState
     extends ConsumerState<AdvancedSettingsScreen> {
+  final ScrollController _scrollController = ScrollController();
+  bool _headerCollapsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final offset = _scrollController.offset;
+    if (!_headerCollapsed && offset > 48) {
+      setState(() => _headerCollapsed = true);
+    } else if (_headerCollapsed && offset < 14) {
+      setState(() => _headerCollapsed = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   String _timeoutLabel(int seconds) => switch (seconds) {
         0 => 'Immediately',
         300 => 'After 5 minutes',
@@ -53,8 +78,9 @@ class _AdvancedSettingsScreenState
           ActionSheetItem(
             label: pair.$2,
             isSelected: currentSeconds == pair.$1,
-            onTap: () =>
-                ref.read(settingsStoreProvider).setAppLockTimeoutSeconds(pair.$1),
+            onTap: () => ref
+                .read(settingsStoreProvider)
+                .setAppLockTimeoutSeconds(pair.$1),
           ),
       ],
     );
@@ -97,7 +123,7 @@ class _AdvancedSettingsScreenState
           final c = ctx.colors;
           final t = ctx.typo;
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            padding: MoglogSpacing.sheetPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -119,19 +145,21 @@ class _AdvancedSettingsScreenState
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Enter a passphrase to protect this backup.',
-                  style: t.caption.copyWith(color: c.secondaryLabel, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  'Enter a passphrase to protect this portable backup.',
+                  style: t.caption.copyWith(color: c.secondaryLabel),
                 ),
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  padding: const EdgeInsets.only(left: 14, right: 4),
+                  decoration: ShapeDecoration(
                     color: c.tertiaryBackground,
-                    borderRadius: MoglogShapes.control,
-                    border: Border.all(
-                      color: error != null ? c.destructive : c.separator,
+                    shape: MoglogShapes.smooth(
+                      MoglogShapes.controlRadius,
+                      side: BorderSide(
+                        color: error != null ? c.destructive : c.glassBorder,
+                        width: error != null ? 1.2 : c.hairlineWidth,
+                      ),
                     ),
                   ),
                   child: Row(
@@ -140,17 +168,21 @@ class _AdvancedSettingsScreenState
                         child: TextField(
                           controller: ctrl,
                           obscureText: obscure,
+                          cursorColor: c.accent,
                           style: t.body.copyWith(color: c.label),
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             border: InputBorder.none,
                             hintText: 'Passphrase (min 6 chars)',
+                            hintStyle:
+                                t.subhead.copyWith(color: c.tertiaryLabel),
                           ),
                         ),
                       ),
                       IconButton(
+                        tooltip: obscure ? 'Show passphrase' : 'Hide passphrase',
                         icon: Icon(
                           obscure ? MoglogIcons.eye : MoglogIcons.eyeOff,
-                          size: 18,
+                          size: 19,
                           color: c.secondaryLabel,
                         ),
                         onPressed: () =>
@@ -161,7 +193,10 @@ class _AdvancedSettingsScreenState
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 8),
-                  Text(error!, style: t.footnote.copyWith(color: c.destructive)),
+                  Text(
+                    error!,
+                    style: t.footnote.copyWith(color: c.destructive),
+                  ),
                 ],
                 const SizedBox(height: 16),
                 IosPrimaryButton(
@@ -170,7 +205,8 @@ class _AdvancedSettingsScreenState
                     final pass = ctrl.text.trim();
                     if (pass.length < 6) {
                       setSheetState(
-                        () => error = 'Passphrase must be at least 6 characters.',
+                        () =>
+                            error = 'Passphrase must be at least 6 characters.',
                       );
                       return;
                     }
@@ -221,8 +257,11 @@ class _AdvancedSettingsScreenState
             final c = ctx.colors;
             final t = ctx.typo;
             return AlertDialog(
-              backgroundColor: c.secondaryBackground,
-              shape: const RoundedRectangleBorder(borderRadius: MoglogShapes.card),
+              backgroundColor: c.elevatedSurface,
+              shape: MoglogShapes.smooth(
+                MoglogShapes.cardRadius,
+                side: BorderSide(color: c.glassBorder, width: c.hairlineWidth),
+              ),
               content: Row(
                 children: [
                   SizedBox(
@@ -314,8 +353,8 @@ class _AdvancedSettingsScreenState
       final bytes = await file.readAsBytes();
       if (!mounted) return;
 
-      // Check if it is an encrypted MOGLOG_ENC_V1 envelope
-      final preview = utf8.decode(bytes.take(2048).toList(), allowMalformed: true);
+      final preview =
+          utf8.decode(bytes.take(2048).toList(), allowMalformed: true);
       final isEncrypted = preview.contains(BackupEnvelopePayload.formatMagic);
       if (isEncrypted) {
         _promptImportPassphrase(bytes);
@@ -341,7 +380,7 @@ class _AdvancedSettingsScreenState
           final c = ctx.colors;
           final t = ctx.typo;
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            padding: MoglogSpacing.sheetPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -356,10 +395,17 @@ class _AdvancedSettingsScreenState
                 ),
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  padding: const EdgeInsets.only(left: 14, right: 4),
+                  decoration: ShapeDecoration(
                     color: c.tertiaryBackground,
-                    borderRadius: MoglogShapes.control,
+                    shape: MoglogShapes.smooth(
+                      MoglogShapes.controlRadius,
+                      side: BorderSide(
+                        color: c.glassBorder,
+                        width: c.hairlineWidth,
+                      ),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -368,17 +414,21 @@ class _AdvancedSettingsScreenState
                           controller: ctrl,
                           obscureText: obscure,
                           autofocus: true,
+                          cursorColor: c.accent,
                           style: t.body.copyWith(color: c.label),
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             border: InputBorder.none,
                             hintText: 'Backup passphrase',
+                            hintStyle:
+                                t.subhead.copyWith(color: c.tertiaryLabel),
                           ),
                         ),
                       ),
                       IconButton(
+                        tooltip: obscure ? 'Show passphrase' : 'Hide passphrase',
                         icon: Icon(
                           obscure ? MoglogIcons.eye : MoglogIcons.eyeOff,
-                          size: 18,
+                          size: 19,
                           color: c.secondaryLabel,
                         ),
                         onPressed: () =>
@@ -439,8 +489,11 @@ class _AdvancedSettingsScreenState
             final c = ctx.colors;
             final t = ctx.typo;
             return AlertDialog(
-              backgroundColor: c.secondaryBackground,
-              shape: const RoundedRectangleBorder(borderRadius: MoglogShapes.card),
+              backgroundColor: c.elevatedSurface,
+              shape: MoglogShapes.smooth(
+                MoglogShapes.cardRadius,
+                side: BorderSide(color: c.glassBorder, width: c.hairlineWidth),
+              ),
               content: ValueListenableBuilder<
                   ({String stage, int done, int total})>(
                 valueListenable: progress,
@@ -476,11 +529,8 @@ class _AdvancedSettingsScreenState
                         state.total > 0
                             ? '${state.stage} (${state.done} / ${state.total})'
                             : state.stage,
-                        style: t.caption.copyWith(
-                          color: c.secondaryLabel,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
+                        style: t.caption.copyWith(color: c.secondaryLabel),
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 10),
@@ -552,7 +602,7 @@ class _AdvancedSettingsScreenState
           final c = ctx.colors;
           final t = ctx.typo;
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            padding: MoglogSpacing.sheetPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -575,18 +625,20 @@ class _AdvancedSettingsScreenState
                 const SizedBox(height: 6),
                 Text(
                   'Stored privately on this device only.',
-                  style: t.caption.copyWith(color: c.secondaryLabel, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  style: t.caption.copyWith(color: c.secondaryLabel),
                 ),
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  padding: const EdgeInsets.only(left: 14, right: 4),
+                  decoration: ShapeDecoration(
                     color: c.tertiaryBackground,
-                    borderRadius: MoglogShapes.control,
-                    border: Border.all(
-                      color: error != null ? c.destructive : c.separator,
+                    shape: MoglogShapes.smooth(
+                      MoglogShapes.controlRadius,
+                      side: BorderSide(
+                        color: error != null ? c.destructive : c.glassBorder,
+                        width: error != null ? 1.2 : c.hairlineWidth,
+                      ),
                     ),
                   ),
                   child: Row(
@@ -595,17 +647,21 @@ class _AdvancedSettingsScreenState
                         child: TextField(
                           controller: ctrl,
                           obscureText: obscure,
+                          cursorColor: c.accent,
                           style: t.subhead.copyWith(color: c.label),
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             border: InputBorder.none,
                             hintText: '32-char v3 key or v4 JWT token',
+                            hintStyle:
+                                t.subhead.copyWith(color: c.tertiaryLabel),
                           ),
                         ),
                       ),
                       IconButton(
+                        tooltip: obscure ? 'Show credential' : 'Hide credential',
                         icon: Icon(
                           obscure ? MoglogIcons.eye : MoglogIcons.eyeOff,
-                          size: 18,
+                          size: 19,
                           color: c.secondaryLabel,
                         ),
                         onPressed: () =>
@@ -616,7 +672,10 @@ class _AdvancedSettingsScreenState
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 8),
-                  Text(error!, style: t.footnote.copyWith(color: c.destructive)),
+                  Text(
+                    error!,
+                    style: t.footnote.copyWith(color: c.destructive),
+                  ),
                 ],
                 const SizedBox(height: 16),
                 IosPrimaryButton(
@@ -642,11 +701,13 @@ class _AdvancedSettingsScreenState
                 ),
                 if (ctrl.text.trim().isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  IosSecondaryButton(
+                  IosDestructiveButton(
                     text: 'Remove Credential',
-                    textColor: c.destructive,
+                    filled: false,
                     onTap: () async {
-                      await ref.read(dramaControllerProvider).saveTmdbApiKey('');
+                      await ref
+                          .read(dramaControllerProvider)
+                          .saveTmdbApiKey('');
                       if (ctx.mounted) Navigator.of(ctx).pop();
                       ref
                           .read(toastProvider.notifier)
@@ -678,15 +739,22 @@ class _AdvancedSettingsScreenState
         children: [
           IosLargeTitleHeader(
             title: 'Advanced & Storage',
-            collapsed: true,
+            collapsed: _headerCollapsed,
             leadingActions: IosCircleIconButton(
               icon: MoglogIcons.chevronLeft,
+              tooltip: 'Back',
               onTap: widget.onBack,
             ),
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(
+                MoglogSpacing.md,
+                MoglogSpacing.sm,
+                MoglogSpacing.md,
+                56,
+              ),
               children: [
                 // App Security
                 IosGroupedSection(
@@ -789,8 +857,10 @@ class _AdvancedSettingsScreenState
                       showChevron: true,
                       trailing: Text(
                         hasKey ? 'Configured' : 'Not Set',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: t.footnote.copyWith(
-                          color: hasKey ? c.accent : c.destructive,
+                          color: hasKey ? c.accentText : c.destructive,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

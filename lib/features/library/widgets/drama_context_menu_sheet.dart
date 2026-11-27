@@ -73,20 +73,19 @@ class _DramaContextMenuContentState extends State<_DramaContextMenuContent> {
     final t = context.typo;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(18, 6, 18, 20),
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Preview
           Row(
             children: [
               PosterImage(
                 url: widget.drama.posterPath,
-                width: 50,
-                height: 70,
-                borderRadius: BorderRadius.circular(10),
+                width: 52,
+                height: 74,
+                borderRadius: const BorderRadius.all(Radius.circular(11)),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,8 +109,6 @@ class _DramaContextMenuContentState extends State<_DramaContextMenuContent> {
             ],
           ),
           const SizedBox(height: 16),
-
-          // Inline status segmented control
           IosSegmentedControl(
             labels: _statuses,
             selectedIndex: _statuses.indexOf(_status).clamp(0, 2),
@@ -121,16 +118,20 @@ class _DramaContextMenuContentState extends State<_DramaContextMenuContent> {
             },
           ),
           const SizedBox(height: 14),
-
-          // 5-Star Quick Rating (2.0..10.0)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: ShapeDecoration(
               color: c.tertiaryBackground,
-              shape: MoglogShapes.smooth(12),
+              shape: MoglogShapes.smooth(
+                MoglogShapes.cardRadius,
+                side: BorderSide(color: c.glassBorder, width: c.hairlineWidth),
+              ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
               children: [
                 Text(
                   'Quick Rate',
@@ -140,21 +141,32 @@ class _DramaContextMenuContentState extends State<_DramaContextMenuContent> {
                   ),
                 ),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: List.generate(5, (idx) {
                     final starScore = (idx + 1) * 2.0;
                     final filled = _rating >= starScore;
                     return IosPressable(
+                      semanticLabel:
+                          'Rate ${starScore.toInt()} out of 10 stars',
+                      semanticSelected: filled,
                       onTap: () {
                         MoglogHaptics.selectionChanged();
                         setState(() => _rating = starScore);
                         widget.onQuickRate(starScore);
                       },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Icon(
-                          filled ? MoglogIcons.starFilled : MoglogIcons.starOutline,
-                          size: 22,
-                          color: filled ? c.starGold : c.secondaryLabel,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 44,
+                        ),
+                        child: Center(
+                          child: Icon(
+                            filled
+                                ? MoglogIcons.starFilled
+                                : MoglogIcons.starOutline,
+                            size: 22,
+                            color: filled ? c.starGold : c.secondaryLabel,
+                          ),
                         ),
                       ),
                     );
@@ -164,7 +176,6 @@ class _DramaContextMenuContentState extends State<_DramaContextMenuContent> {
             ),
           ),
           const SizedBox(height: 14),
-
           IosGroupedSection(
             children: [
               IosGroupedRow(

@@ -7,7 +7,8 @@ import '../../../core/design_system/shapes.dart';
 import '../../../core/design_system/theme.dart';
 import '../../../domain/model/drama.dart';
 
-/// Compact list row with swipe-right (`+1 Ep`) and swipe-left (`Move to Recycle Bin`).
+/// Compact list row with squircle-20 surface, swipe-right (`+1 Ep`), and
+/// swipe-left (`Move to Recycle Bin`).
 class CompactDramaRow extends StatelessWidget {
   final Drama drama;
   final bool isTopFour;
@@ -35,141 +36,140 @@ class CompactDramaRow extends StatelessWidget {
     final c = context.colors;
     final t = context.typo;
     final statusColor = c.statusColor(drama.status);
+    final statusText = c.statusTextColor(drama.status);
     final score = drama.effectiveRating;
 
-    final card = IosPressable(
+    final card = IosCard(
+      padding: const EdgeInsets.all(11),
+      borderColor: isSelected ? c.accent : c.cardBorder,
       onTap: onTap,
       onLongPress: onLongPress,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: ShapeDecoration(
-          color: c.secondaryBackground,
-          shape: MoglogShapes.smooth(
-            MoglogShapes.cardRadius,
-            side: BorderSide(
-              color: isSelected ? c.accent : c.separator.withValues(alpha: 0.4),
-              width: isSelected ? 1.8 : 0.6,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            if (multiSelectMode) ...[
-              Container(
-                width: 22,
-                height: 22,
-                margin: const EdgeInsets.only(right: 10),
-                decoration: BoxDecoration(
-                  color: isSelected ? c.accent : Colors.transparent,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected ? c.accent : c.secondaryLabel,
-                    width: 1.5,
-                  ),
+      child: Row(
+        children: [
+          if (multiSelectMode) ...[
+            Container(
+              width: 22,
+              height: 22,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                color: isSelected ? c.accent : c.tertiaryBackground,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? c.accent : c.secondaryLabel,
+                  width: 1.5,
                 ),
-                alignment: Alignment.center,
-                child: isSelected
-                    ? Icon(MoglogIcons.check, size: 13, color: c.onAccent)
-                    : null,
               ),
-            ],
-            PosterImage(
-              url: drama.posterPath,
-              width: 48,
-              height: 68,
-              borderRadius: BorderRadius.circular(9),
+              alignment: Alignment.center,
+              child: isSelected
+                  ? Icon(MoglogIcons.check, size: 13, color: c.onAccent)
+                  : null,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          drama.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: t.headline.copyWith(
-                            color: c.label,
-                            fontSize: 15.5,
-                          ),
+          ],
+          PosterImage(
+            url: drama.posterPath,
+            width: 50,
+            height: 72,
+            borderRadius: const BorderRadius.all(Radius.circular(10)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        drama.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.callout.copyWith(
+                          color: c.label,
+                          fontWeight: FontWeight.w600,
                         ),
-                      ),
-                      if (isTopFour)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 4),
-                          child: Icon(
-                            MoglogIcons.starFilled,
-                            size: 13,
-                            color: c.starGold,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          drama.status,
-                          style: t.caption2.copyWith(
-                            color: statusColor,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        drama.totalEpisodes > 0
-                            ? 'Ep ${drama.episodesWatched}/${drama.totalEpisodes}'
-                            : '${drama.episodesWatched} eps',
-                        style: t.footnote.copyWith(color: c.secondaryLabel),
-                      ),
-                      if (score > 0) ...[
-                        const SizedBox(width: 8),
-                        Icon(MoglogIcons.starFilled, size: 12, color: c.starGold),
-                        const SizedBox(width: 2),
-                        Text(
-                          score.toStringAsFixed(1),
-                          style: t.footnote.copyWith(
-                            color: c.label,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (drama.totalEpisodes > 0) ...[
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: MoglogShapes.pill,
-                      child: LinearProgressIndicator(
-                        value: drama.progressFraction,
-                        minHeight: 3.5,
-                        backgroundColor: c.tertiaryBackground,
-                        color: statusColor,
                       ),
                     ),
+                    if (isTopFour)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Icon(
+                          MoglogIcons.starFilled,
+                          size: 14,
+                          color: c.starGold,
+                        ),
+                      ),
                   ],
+                ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: ShapeDecoration(
+                        color: statusColor.withValues(alpha: 0.15),
+                        shape: MoglogShapes.smooth(6),
+                      ),
+                      child: Text(
+                        drama.status,
+                        style: t.caption2.copyWith(
+                          color: statusText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      drama.totalEpisodes > 0
+                          ? 'Ep ${drama.episodesWatched}/${drama.totalEpisodes}'
+                          : '${drama.episodesWatched} eps',
+                      style: t.footnote.copyWith(color: c.secondaryLabel),
+                    ),
+                    if (score > 0)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            MoglogIcons.starFilled,
+                            size: 12,
+                            color: c.starGold,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            score.toStringAsFixed(1),
+                            style: t.footnote.copyWith(
+                              color: c.label,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+                if (drama.totalEpisodes > 0) ...[
+                  const SizedBox(height: 7),
+                  ClipRRect(
+                    borderRadius: MoglogShapes.pill,
+                    child: LinearProgressIndicator(
+                      value: drama.progressFraction,
+                      minHeight: 3.5,
+                      backgroundColor: c.tertiaryBackground,
+                      color: statusColor,
+                    ),
+                  ),
                 ],
-              ),
+              ],
             ),
-            if (!multiSelectMode) ...[
-              const SizedBox(width: 8),
-              Icon(MoglogIcons.chevronRight, size: 17, color: c.tertiaryLabel),
-            ],
+          ),
+          if (!multiSelectMode) ...[
+            const SizedBox(width: 8),
+            Icon(MoglogIcons.chevronRight, size: 18, color: c.tertiaryLabel),
           ],
-        ),
+        ],
       ),
     );
 
@@ -181,7 +181,7 @@ class CompactDramaRow extends StatelessWidget {
         if (direction == DismissDirection.startToEnd) {
           MoglogHaptics.success();
           onIncrementEpisode();
-          return false; // Keep row visible after +1
+          return false;
         } else {
           MoglogHaptics.warning();
           onMoveToBin();
@@ -189,9 +189,9 @@ class CompactDramaRow extends StatelessWidget {
         }
       },
       background: Container(
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: c.accent,
-          borderRadius: MoglogShapes.card,
+          shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
         ),
         padding: const EdgeInsets.only(left: 18),
         alignment: Alignment.centerLeft,
@@ -210,9 +210,9 @@ class CompactDramaRow extends StatelessWidget {
         ),
       ),
       secondaryBackground: Container(
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: c.destructive,
-          borderRadius: MoglogShapes.card,
+          shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
         ),
         padding: const EdgeInsets.only(right: 18),
         alignment: Alignment.centerRight,
@@ -222,12 +222,12 @@ class CompactDramaRow extends StatelessWidget {
             Text(
               'Recycle Bin',
               style: t.subhead.copyWith(
-                color: Colors.white,
+                color: c.onDestructive,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(width: 6),
-            const Icon(MoglogIcons.trash, color: Colors.white, size: 18),
+            Icon(MoglogIcons.trash, color: c.onDestructive, size: 18),
           ],
         ),
       ),

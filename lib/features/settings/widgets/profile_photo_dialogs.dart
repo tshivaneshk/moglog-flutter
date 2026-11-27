@@ -9,10 +9,11 @@ import 'package:image/image.dart' as img;
 import '../../../core/design_system/components.dart';
 import '../../../core/design_system/icons.dart';
 import '../../../core/design_system/theme.dart';
+import '../../../core/design_system/tokens.dart';
 import '../../../core/network/image_cache_manager.dart';
 
-/// Full-screen WhatsApp-style circular pan/pinch-to-zoom cropper (1x..4.5x)
-/// exporting 512x512 JPEG (quality 85) as Base64 matching Kotlin `ProfilePhotoDialogs.kt`.
+/// Full-screen circular pan/pinch-to-zoom cropper (1x..4.5x)
+/// exporting 512x512 JPEG (quality 85) as Base64.
 Future<String?> showProfileImageCropDialog({
   required BuildContext context,
   required Uint8List imageBytes,
@@ -62,8 +63,10 @@ class _ProfileImageCropPageState extends State<_ProfileImageCropPage> {
 
       final centerX = (decoded.width / 2) - (tx / scale);
       final centerY = (decoded.height / 2) - (ty / scale);
-      final left = (centerX - cropSize / 2).round().clamp(0, decoded.width - cropSize);
-      final top = (centerY - cropSize / 2).round().clamp(0, decoded.height - cropSize);
+      final left =
+          (centerX - cropSize / 2).round().clamp(0, decoded.width - cropSize);
+      final top =
+          (centerY - cropSize / 2).round().clamp(0, decoded.height - cropSize);
 
       final cropped = img.copyCrop(
         decoded,
@@ -84,32 +87,40 @@ class _ProfileImageCropPageState extends State<_ProfileImageCropPage> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
+    const darkPalette = MoglogColors.dark;
     final t = context.typo;
     final screenW = MediaQuery.sizeOf(context).width;
     final cropDiameter = min(screenW - 48, 320.0);
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: darkPalette.background,
       body: SafeArea(
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  IosCircleIconButton(
-                    icon: MoglogIcons.close,
-                    backgroundColor: const Color(0xFF1C1C1E),
-                    tint: Colors.white,
-                    onTap: () => Navigator.of(context).pop(null),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IosCircleIconButton(
+                      icon: MoglogIcons.close,
+                      tooltip: 'Cancel',
+                      backgroundColor: darkPalette.secondaryBackground,
+                      tint: darkPalette.onMedia,
+                      onTap: () => Navigator.of(context).pop(null),
+                    ),
                   ),
-                  Text(
-                    'Move and Scale',
-                    style: t.headline.copyWith(color: Colors.white),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 54),
+                    child: Text(
+                      'Move and Scale',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.headline.copyWith(color: darkPalette.onMedia),
+                    ),
                   ),
-                  const SizedBox(width: 36),
                 ],
               ),
             ),
@@ -138,7 +149,7 @@ class _ProfileImageCropPageState extends State<_ProfileImageCropPage> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: c.accent.withValues(alpha: 0.85),
+                              color: darkPalette.accent.withValues(alpha: 0.85),
                               width: 2.2,
                             ),
                           ),
@@ -164,12 +175,13 @@ class _ProfileImageCropPageState extends State<_ProfileImageCropPage> {
   }
 }
 
-/// Full-screen dark profile photo viewer matching Kotlin `ProfilePhotoViewerDialog`.
+/// Full-screen profile photo viewer dialog.
 Future<void> showProfilePhotoViewerDialog({
   required BuildContext context,
   required String photoBase64,
   required String photoUrl,
 }) {
+  const darkPalette = MoglogColors.dark;
   ImageProvider? imgProvider;
   if (photoBase64.trim().isNotEmpty) {
     try {
@@ -184,11 +196,11 @@ Future<void> showProfilePhotoViewerDialog({
 
   return showDialog<void>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.92),
+    barrierColor: darkPalette.background.withValues(alpha: 0.92),
     builder: (ctx) => GestureDetector(
       onTap: () => Navigator.of(ctx).pop(),
       child: Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: darkPalette.background.withValues(alpha: 0.0),
         body: SafeArea(
           child: Stack(
             children: [
@@ -198,10 +210,10 @@ Future<void> showProfilePhotoViewerDialog({
                         maxScale: 4.0,
                         child: Image(image: imgProvider, fit: BoxFit.contain),
                       )
-                    : const Icon(
+                    : Icon(
                         MoglogIcons.person,
                         size: 96,
-                        color: Colors.white54,
+                        color: darkPalette.onMediaSecondary,
                       ),
               ),
               Positioned(
@@ -209,8 +221,9 @@ Future<void> showProfilePhotoViewerDialog({
                 right: 16,
                 child: IosCircleIconButton(
                   icon: MoglogIcons.close,
-                  backgroundColor: const Color(0xFF1C1C1E),
-                  tint: Colors.white,
+                  tooltip: 'Close photo',
+                  backgroundColor: darkPalette.secondaryBackground,
+                  tint: darkPalette.onMedia,
                   onTap: () => Navigator.of(ctx).pop(),
                 ),
               ),

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/celebration/show_completion_celebration.dart';
 import '../core/design_system/components.dart';
 import '../core/design_system/theme.dart';
+import '../core/design_system/tokens.dart';
 import '../core/platform/platform_bridge.dart';
 import '../core/security/app_lock_overlay.dart';
 import '../domain/model/app_settings.dart';
@@ -30,6 +31,7 @@ class _MoglogAppState extends ConsumerState<MoglogApp> {
   void initState() {
     super.initState();
     PlatformBridge.init();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await ref.read(dramaControllerProvider).initialize();
@@ -79,13 +81,7 @@ class _MoglogAppState extends ConsumerState<MoglogApp> {
       ThemeModeSetting.light => ThemeMode.light,
     };
 
-    SystemChrome.setSystemUIOverlayStyle(
-      settings.themeMode == ThemeModeSetting.light
-          ? SystemUiOverlayStyle.dark
-          : SystemUiOverlayStyle.light,
-    );
-
-    // Handle new Google account confirmation sheet matching Kotlin MoglogNavHost
+    // Handle new Google account confirmation sheet
     if (authState.pendingCreateAccountPrompt && !_createAccountDialogShown) {
       _createAccountDialogShown = true;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -141,81 +137,105 @@ class _MoglogAppState extends ConsumerState<MoglogApp> {
       themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) {
-        return Stack(
-          children: [
-            // Clamp system font scaling so extreme accessibility sizes stay usable
-            // without breaking single-line chips, tabs, and headers.
-            MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: MediaQuery.textScalerOf(context).clamp(
-                  minScaleFactor: 0.9,
-                  maxScaleFactor: 1.25,
-                ),
-              ),
-              child: child ?? const SizedBox.shrink(),
-            ),
+        final isLightEffective = switch (themeMode) {
+          ThemeMode.light => true,
+          ThemeMode.dark => false,
+          ThemeMode.system =>
+            MediaQuery.platformBrightnessOf(context) == Brightness.light,
+        };
+        final overlayStyle = (isLightEffective
+                ? SystemUiOverlayStyle.dark
+                : SystemUiOverlayStyle.light)
+            .copyWith(
+          statusBarColor: Colors.transparent,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarDividerColor: Colors.transparent,
+        );
 
-            // Global Confetti Celebration Overlay
-            if (celebrationKey > 0)
-              Positioned.fill(
-                child: CelebrationBlastOverlay(
-                  triggerKey: celebrationKey,
-                  onFinished: () {
-                    if (ref.read(celebrationTriggerProvider) == celebrationKey) {
-                      ref.read(celebrationTriggerProvider.notifier).state = 0;
-                    }
-                  },
+        final reduceMotion = MediaQuery.disableAnimationsOf(context);
+        final toastBottom = MoglogLayout.toastBottomOffset(context);
+
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: overlayStyle,
+          child: Stack(
+            children: [
+              // Support full accessibility font scaling up to 2.0x without clipping.
+              MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: MediaQuery.textScalerOf(context).clamp(
+                    minScaleFactor: 0.85,
+                    maxScaleFactor: 2.0,
+                  ),
                 ),
+                child: child ?? const SizedBox.shrink(),
               ),
 
-            // Global Floating iOS Toast Banner
-            if (toast != null)
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 92,
-                child: IgnorePointer(
-                  ignoring: toast.onAction == null,
-                  child: SafeArea(
-                    top: false,
-                    child: Center(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        child: IosToastBanner(
-                          key: ValueKey(toast.id),
-                          message: toast.message,
-                          actionLabel: toast.actionLabel,
-                          onAction: toast.onAction != null
-                              ? () {
-                                  toast.onAction!();
-                                  ref.read(toastProvider.notifier).dismiss();
-                                }
-                              : null,
+              // Global Confetti Celebration Overlay
+              if (celebrationKey > 0)
+                Positioned.fill(
+                  child: CelebrationBlastOverlay(
+                    triggerKey: celebrationKey,
+                    onFinished: () {
+                      if (ref.read(celebrationTriggerProvider) ==
+                          celebrationKey) {
+                        ref.read(celebrationTriggerProvider.notifier).state = 0;
+                      }
+                    },
+                  ),
+                ),
+
+              // Global Floating iOS Glass Toast Banner positioned above the floating tab bar
+              if (toast != null)
+                Positioned(
+                  left: MoglogSpacing.md,
+                  right: MoglogSpacing.md,
+                  bottom: toastBottom,
+                  child: IgnorePointer(
+                    ignoring: toast.onAction == null,
+                    child: SafeArea(
+                      top: false,
+                      child: Center(
+                        child: AnimatedSwitcher(
+                          duration:
+                              reduceMotion ? Duration.zero : MoglogMotion.fast,
+                          child: IosToastBanner(
+                            key: ValueKey(toast.id),
+                            message: toast.message,
+                            actionLabel: toast.actionLabel,
+                            onAction: toast.onAction != null
+                                ? () {
+                                    toast.onAction!();
+                                    ref.read(toastProvider.notifier).dismiss();
+                                  }
+                                : null,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
+
+              // Biometric / PIN App Lock & Background Privacy Shield
+              AppLockOverlay(
+                appLockEnabled: settings.appLockEnabled,
+                timeoutSeconds: settings.appLockTimeoutSeconds,
+                hideInRecents: settings.hideInRecents,
               ),
 
-            // Biometric / PIN App Lock & Background Privacy Shield
-            AppLockOverlay(
-              appLockEnabled: settings.appLockEnabled,
-              timeoutSeconds: settings.appLockTimeoutSeconds,
-              hideInRecents: settings.hideInRecents,
-            ),
-
-            // Startup Splash Overlay (fades out after >= 750ms + DB ready)
-            IgnorePointer(
-              ignoring: isReady,
-              child: AnimatedOpacity(
-                opacity: isReady ? 0.0 : 1.0,
-                duration: const Duration(milliseconds: 380),
-                curve: Curves.fastOutSlowIn,
-                child: const MoglogStartupSplashScreen(),
+              // Startup Splash Overlay (fades out after >= 750ms + DB ready)
+              IgnorePointer(
+                ignoring: isReady,
+                child: AnimatedOpacity(
+                  opacity: isReady ? 0.0 : 1.0,
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 380),
+                  curve: Curves.fastOutSlowIn,
+                  child: const MoglogStartupSplashScreen(),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );

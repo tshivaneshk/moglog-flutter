@@ -26,11 +26,15 @@ class CuratedStreamingApp {
   });
 }
 
-/// Exact 13 curated streaming platforms from Kotlin `WatchProvidersSection.kt`.
+/// Curated streaming platforms with Android package & deep-link support.
 final List<CuratedStreamingApp> kCuratedStreamingApps = [
   CuratedStreamingApp(
     name: 'Netflix',
-    aliases: const ['Netflix', 'Netflix Standard with Ads', 'Netflix Basic with Ads'],
+    aliases: const [
+      'Netflix',
+      'Netflix Standard with Ads',
+      'Netflix Basic with Ads',
+    ],
     packageName: 'com.netflix.mediaclient',
     appDeepLink: (q) => 'nflx://www.netflix.com/search?q=$q',
     webDeepLink: (q) => 'https://www.netflix.com/search?q=$q',
@@ -39,7 +43,8 @@ final List<CuratedStreamingApp> kCuratedStreamingApps = [
     name: 'Prime Video',
     aliases: const ['Amazon Prime Video', 'Prime Video', 'Amazon Video'],
     packageName: 'com.amazon.avod.thirdpartyclient',
-    webDeepLink: (q) => 'https://www.primevideo.com/search/ref=atv_nb_sr?phrase=$q',
+    webDeepLink: (q) =>
+        'https://www.primevideo.com/search/ref=atv_nb_sr?phrase=$q',
   ),
   CuratedStreamingApp(
     name: 'Disney+ Hotstar',
@@ -132,7 +137,8 @@ CuratedStreamingApp? findCuratedStreamingApp(String providerName) {
   final encodedTitle = Uri.encodeComponent(dramaTitle.trim());
   final curated = findCuratedStreamingApp(primary.name);
   final url = curated?.webDeepLink(encodedTitle) ??
-      ((primary.link != null && primary.link!.toLowerCase().startsWith('https://'))
+      ((primary.link != null &&
+              primary.link!.toLowerCase().startsWith('https://'))
           ? primary.link!
           : 'https://www.themoviedb.org/tv/$dramaId/watch');
   return (primary.name, url);
@@ -214,55 +220,61 @@ class _WatchProvidersSectionState extends State<WatchProvidersSection> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final deviceCountry =
-        (ui.PlatformDispatcher.instance.locale.countryCode ?? 'US').toUpperCase();
+        (ui.PlatformDispatcher.instance.locale.countryCode ?? 'US')
+            .toUpperCase();
     final safeCountry = deviceCountry.isEmpty ? 'US' : deviceCountry;
     if (widget.watchProviders.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    // Prioritize installed apps while preserving relative order
     final sorted = List<StreamingProvider>.from(widget.watchProviders)
       ..sort((a, b) {
         final ca = findCuratedStreamingApp(a.name);
         final cb = findCuratedStreamingApp(b.name);
-        final ia = (ca != null && (_installedCache[ca.packageName] ?? false)) ? 1 : 0;
-        final ib = (cb != null && (_installedCache[cb.packageName] ?? false)) ? 1 : 0;
+        final ia =
+            (ca != null && (_installedCache[ca.packageName] ?? false)) ? 1 : 0;
+        final ib =
+            (cb != null && (_installedCache[cb.packageName] ?? false)) ? 1 : 0;
         return ib.compareTo(ia);
       });
 
     final first = sorted.first;
-    final activeRegion =
-        (first.regionCode ?? '').trim().isNotEmpty ? first.regionCode! : safeCountry;
+    final activeRegion = (first.regionCode ?? '').trim().isNotEmpty
+        ? first.regionCode!
+        : safeCountry;
     final isFallback = first.isRegionFallback;
     final regionBadgeText = (isFallback && activeRegion != safeCountry)
         ? 'Not in $safeCountry · Showing $activeRegion'
         : 'Region: $activeRegion';
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: ShapeDecoration(
-        color: c.secondaryBackground,
-        shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-      ),
+    final railHeight = 56.0 + ((textScale - 1.0).clamp(0.0, 1.0) * 40.0);
+
+    return IosCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
             children: [
-              Text('Where to Watch', style: t.headline.copyWith(color: c.label)),
+              Text(
+                'Where to Watch',
+                style: t.headline.copyWith(color: c.label),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
+                decoration: ShapeDecoration(
                   color: c.tertiaryBackground,
-                  borderRadius: BorderRadius.circular(6),
+                  shape: MoglogShapes.smooth(7),
                 ),
                 child: Text(
                   regionBadgeText,
                   style: t.caption2.copyWith(
-                    color: isFallback ? c.secondaryLabel : c.accent,
+                    color: isFallback ? c.secondaryLabel : c.accentText,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -271,7 +283,7 @@ class _WatchProvidersSectionState extends State<WatchProvidersSection> {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 48,
+            height: railHeight,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: sorted.length,
@@ -279,8 +291,8 @@ class _WatchProvidersSectionState extends State<WatchProvidersSection> {
               itemBuilder: (_, idx) {
                 final provider = sorted[idx];
                 final curated = findCuratedStreamingApp(provider.name);
-                final isInstalled =
-                    curated != null && (_installedCache[curated.packageName] ?? false);
+                final isInstalled = curated != null &&
+                    (_installedCache[curated.packageName] ?? false);
                 final availability =
                     (provider.availabilityType ?? '').trim().isNotEmpty
                         ? provider.availabilityType!
@@ -289,16 +301,25 @@ class _WatchProvidersSectionState extends State<WatchProvidersSection> {
                     isInstalled ? 'Installed · $availability' : availability;
 
                 return IosPressable(
+                  semanticLabel: 'Open ${provider.name}, $subtitle',
                   onTap: () => _launchProvider(provider),
                   hapticOnTap: true,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+                      horizontal: 12,
+                      vertical: 8,
                     ),
-                    decoration: BoxDecoration(
+                    decoration: ShapeDecoration(
                       color: c.tertiaryBackground,
-                      borderRadius: MoglogShapes.control,
+                      shape: MoglogShapes.smooth(
+                        MoglogShapes.controlRadius,
+                        side: BorderSide(
+                          color: isInstalled
+                              ? widget.accentColor.withValues(alpha: 0.45)
+                              : c.glassBorder,
+                          width: c.hairlineWidth,
+                        ),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -306,18 +327,21 @@ class _WatchProvidersSectionState extends State<WatchProvidersSection> {
                         if (provider.logoUrl != null) ...[
                           PosterImage(
                             url: provider.logoUrl!,
-                            width: 30,
-                            height: 30,
-                            borderRadius: BorderRadius.circular(7),
+                            width: 32,
+                            height: 32,
+                            borderRadius:
+                                const BorderRadius.all(Radius.circular(8)),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 9),
                         ],
                         Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               provider.name,
+                              maxLines: 1,
                               style: t.footnote.copyWith(
                                 color: c.label,
                                 fontWeight: FontWeight.w600,
@@ -325,6 +349,7 @@ class _WatchProvidersSectionState extends State<WatchProvidersSection> {
                             ),
                             Text(
                               subtitle,
+                              maxLines: 1,
                               style: t.caption2.copyWith(
                                 color: isInstalled
                                     ? widget.accentColor
@@ -343,7 +368,7 @@ class _WatchProvidersSectionState extends State<WatchProvidersSection> {
           const SizedBox(height: 10),
           Text(
             'Availability data powered by JustWatch · Tap any platform to open',
-            style: t.caption2.copyWith(color: c.tertiaryLabel),
+            style: t.caption2.copyWith(color: c.secondaryLabel),
           ),
         ],
       ),

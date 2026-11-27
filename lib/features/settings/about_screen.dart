@@ -7,6 +7,7 @@ import '../../core/design_system/components.dart';
 import '../../core/design_system/icons.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/design_system/tokens.dart';
 import '../../domain/logic/version_checker.dart';
 
 sealed class _UpdateCheckState {
@@ -62,13 +63,15 @@ class AboutScreen extends StatefulWidget {
 }
 
 class _AboutScreenState extends State<AboutScreen> {
-  static const int _aboutCacheTtlMs = 30 * 60 * 1000; // 30 minutes
+  static const int _aboutCacheTtlMs = 30 * 60 * 1000;
   static _UpdateCheckState? _cachedUpdateState;
   static int _cachedUpdateAtMs = 0;
   static int? _cachedTotalDownloads;
   static int _cachedDownloadsAtMs = 0;
 
-  String _versionName = '3.1.2';
+  final ScrollController _scrollController = ScrollController();
+  bool _headerCollapsed = false;
+  String _versionName = '3.2.0';
   _UpdateCheckState _updateState = const _UpdateIdle();
   int? _totalDownloads;
 
@@ -83,11 +86,22 @@ class _AboutScreenState extends State<AboutScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _initAndCheck();
+  }
+
+  void _onScroll() {
+    final offset = _scrollController.offset;
+    if (!_headerCollapsed && offset > 48) {
+      setState(() => _headerCollapsed = true);
+    } else if (_headerCollapsed && offset < 14) {
+      setState(() => _headerCollapsed = false);
+    }
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _dio.close();
     super.dispose();
   }
@@ -126,7 +140,8 @@ class _AboutScreenState extends State<AboutScreen> {
       if (data == null) {
         if (mounted) {
           setState(
-            () => _updateState = const _UpdateError('Empty response from server'),
+            () =>
+                _updateState = const _UpdateError('Empty response from server'),
           );
         }
         return;
@@ -141,7 +156,8 @@ class _AboutScreenState extends State<AboutScreen> {
         defaultReleaseUrl,
       );
 
-      const defaultDownloadUrl = 'https://moglog-instructions.vercel.app/download';
+      const defaultDownloadUrl =
+          'https://moglog-instructions.vercel.app/download';
       var downloadUrl = defaultDownloadUrl;
       final assets = data['assets'];
       if (assets is List) {
@@ -208,7 +224,8 @@ class _AboutScreenState extends State<AboutScreen> {
           ),
         );
         var sum = 0;
-        for (final rel in (res.data ?? const []).whereType<Map<String, dynamic>>()) {
+        for (final rel
+            in (res.data ?? const []).whereType<Map<String, dynamic>>()) {
           final assets = rel['assets'];
           if (assets is List) {
             for (final a in assets.whereType<Map<String, dynamic>>()) {
@@ -239,7 +256,8 @@ class _AboutScreenState extends State<AboutScreen> {
 
     final footerText = switch (_updateState) {
       _UpdateUpToDate() => 'You are using the latest version of Moglog.',
-      _UpdateAvailable() => 'A new signed APK release is ready for installation.',
+      _UpdateAvailable() =>
+        'A new signed APK release is ready for installation.',
       _UpdateError(message: final m) => 'Check failed: $m',
       _ => 'Check GitHub Releases for the newest signed APK build.',
     };
@@ -258,57 +276,68 @@ class _AboutScreenState extends State<AboutScreen> {
         children: [
           IosLargeTitleHeader(
             title: 'About',
-            collapsed: true,
+            collapsed: _headerCollapsed,
             leadingActions: IosCircleIconButton(
               icon: MoglogIcons.chevronLeft,
+              tooltip: 'Back',
               onTap: widget.onBack,
             ),
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(
+                MoglogSpacing.md,
+                MoglogSpacing.sm,
+                MoglogSpacing.md,
+                56,
+              ),
               children: [
                 // Branding Hero
-                Column(
-                  children: [
-                    const SizedBox(height: 6),
-                    Container(
-                      width: 68,
-                      height: 68,
-                      padding: const EdgeInsets.all(10),
-                      decoration: ShapeDecoration(
-                        color: c.secondaryBackground,
-                        shape: MoglogShapes.smooth(
-                          18,
-                          side: BorderSide(color: c.separator, width: 0.7),
+                IosCard(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 72,
+                        height: 72,
+                        padding: const EdgeInsets.all(10),
+                        decoration: ShapeDecoration(
+                          color: c.tertiaryBackground,
+                          shape: MoglogShapes.smooth(
+                            20,
+                            side: BorderSide(
+                              color: c.accent.withValues(alpha: 0.35),
+                              width: 1.0,
+                            ),
+                          ),
+                        ),
+                        child: Image.asset(
+                          'assets/images/app_logo2.png',
+                          fit: BoxFit.contain,
                         ),
                       ),
-                      child: Image.asset(
-                        'assets/images/app_logo2.png',
-                        fit: BoxFit.contain,
+                      const SizedBox(height: 12),
+                      Text(
+                        'Moglog',
+                        style: t.title1.copyWith(color: c.label),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Moglog',
-                      style: t.title2.copyWith(
-                        color: c.label,
-                        fontSize: 26,
+                      const SizedBox(height: 4),
+                      Text(
+                        'Version $_versionName',
+                        style: t.subhead.copyWith(color: c.secondaryLabel),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Version $_versionName',
-                      style: t.subhead.copyWith(color: c.secondaryLabel),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Clean, private drama & TV tracker · Open Source (MIT)',
-                      style: t.caption.copyWith(color: c.tertiaryLabel),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                      const SizedBox(height: 3),
+                      Text(
+                        'Clean, private drama & TV tracker · Open Source (MIT)',
+                        textAlign: TextAlign.center,
+                        style: t.caption.copyWith(color: c.secondaryLabel),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 20),
 
                 // Section 1: Official Resources
                 IosGroupedSection(
@@ -369,7 +398,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 20),
 
                 // Section 2: Software Updates
                 IosGroupedSection(
@@ -394,12 +423,16 @@ class _AboutScreenState extends State<AboutScreen> {
                         _UpdateUpToDate() => Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(MoglogIcons.check, size: 16, color: c.accent),
+                              Icon(
+                                MoglogIcons.check,
+                                size: 16,
+                                color: c.accentText,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 'Latest',
                                 style: t.subhead.copyWith(
-                                  color: c.accent,
+                                  color: c.accentText,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -417,7 +450,7 @@ class _AboutScreenState extends State<AboutScreen> {
                             child: Text(
                               'New',
                               style: t.caption2.copyWith(
-                                color: Colors.white,
+                                color: c.onAccent,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -425,7 +458,7 @@ class _AboutScreenState extends State<AboutScreen> {
                         _ => Text(
                             'Check',
                             style: t.subhead.copyWith(
-                              color: c.accent,
+                              color: c.accentText,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -443,23 +476,25 @@ class _AboutScreenState extends State<AboutScreen> {
                             Row(
                               children: [
                                 Container(
-                                  width: 24,
-                                  height: 24,
+                                  width: 26,
+                                  height: 26,
                                   decoration: BoxDecoration(
-                                    color: c.accent.withValues(alpha: 0.15),
+                                    color: c.accentSubtle,
                                     shape: BoxShape.circle,
                                   ),
                                   alignment: Alignment.center,
                                   child: Icon(
                                     MoglogIcons.download,
                                     size: 14,
-                                    color: c.accent,
+                                    color: c.accentText,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  avail.latestVersion,
-                                  style: t.headline.copyWith(color: c.label),
+                                Expanded(
+                                  child: Text(
+                                    avail.latestVersion,
+                                    style: t.headline.copyWith(color: c.label),
+                                  ),
                                 ),
                               ],
                             ),
@@ -496,7 +531,7 @@ class _AboutScreenState extends State<AboutScreen> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 20),
 
                 // Section 3: Privacy & Legal
                 IosGroupedSection(

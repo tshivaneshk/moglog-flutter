@@ -20,6 +20,7 @@ import '../core/security/secure_store.dart';
 import '../data/local/app_database.dart';
 import '../data/local/settings_store.dart';
 import '../data/remote/cloud_sync_repository.dart';
+import '../data/remote/show_reviews_repository.dart';
 import '../data/remote/tmdb_api.dart';
 import '../data/remote/watch_circle_repository.dart';
 import '../data/repository/drama_repository_impl.dart';
@@ -61,6 +62,12 @@ final watchCircleRepositoryProvider = Provider<WatchCircleRepository>(
   (ref) => WatchCircleRepository(
     settingsStore: ref.watch(settingsStoreProvider),
     notificationService: ref.watch(notificationServiceProvider),
+  ),
+);
+
+final showReviewsRepositoryProvider = Provider<ShowReviewsRepository>(
+  (ref) => ShowReviewsRepository(
+    settingsStore: ref.watch(settingsStoreProvider),
   ),
 );
 

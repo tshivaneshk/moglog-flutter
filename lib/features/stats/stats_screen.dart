@@ -7,16 +7,32 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../app/ios_bottom_tab_bar.dart';
 import '../../app/providers.dart';
 import '../../core/design_system/components.dart';
 import '../../core/design_system/icons.dart';
 import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/design_system/tokens.dart';
 import '../../core/platform/platform_bridge.dart';
 import '../../domain/logic/library_filter.dart';
 import '../../domain/logic/stats_calculator.dart';
 import '../../domain/model/drama.dart';
+
+Color _readableTierInk(Color raw, MoglogColors c) {
+  if (c.isDark) return raw;
+  final hsl = HSLColor.fromColor(raw);
+  if (hsl.lightness > 0.36) {
+    return hsl.withLightness(0.32).toColor();
+  }
+  return raw;
+}
+
+Color _onTierBadgeColor(Color raw, MoglogColors c) {
+  final est = ThemeData.estimateBrightnessForColor(raw);
+  return est == Brightness.dark ? c.onMedia : MoglogColors.light.onAccent;
+}
 
 class StatsScreen extends ConsumerStatefulWidget {
   final ValueChanged<int> onDramaTap;
@@ -39,13 +55,13 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
     _scrollController.addListener(_onScroll);
     _chartAnimCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 850),
     )..forward();
   }
 
   void _onScroll() {
     final offset = _scrollController.offset;
-    if (!_headerCollapsed && offset > 60) {
+    if (!_headerCollapsed && offset > 56) {
       setState(() => _headerCollapsed = true);
     } else if (_headerCollapsed && offset < 16) {
       setState(() => _headerCollapsed = false);
@@ -70,7 +86,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
         persona: snap.bingePersona,
         topShows: snap.topRatedShows.take(4).toList(),
       );
-      final name = 'Moglog_Wrapped_${DateTime.now().millisecondsSinceEpoch}.png';
+      final name =
+          'Moglog_Wrapped_${DateTime.now().millisecondsSinceEpoch}.png';
       if (Platform.isIOS) {
         final dir = await getTemporaryDirectory();
         final outFile = File('${dir.path}/$name');
@@ -119,14 +136,14 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
   }
 
   void _showPrestigeTiersSheet(StatsSnapshot snap) {
-    final c = context.colors;
-    final t = context.typo;
     final catalog = getPrestigeTiersCatalog(snap.topGenreName);
     final effectiveHours = max(snap.estimatedHours, snap.doneCount * 10);
 
     showIosBottomSheet<void>(
       context: context,
       builder: (ctx) {
+        final c = ctx.colors;
+        final t = ctx.typo;
         return DraggableScrollableSheet(
           initialChildSize: 0.82,
           minChildSize: 0.5,
@@ -135,7 +152,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
           builder: (_, scrollCtrl) {
             return ListView(
               controller: scrollCtrl,
-              padding: const EdgeInsets.fromLTRB(18, 6, 18, 28),
+              padding: MoglogSpacing.sheetPadding,
               children: [
                 Text(
                   '13 Prestige Tiers',
@@ -151,9 +168,12 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
                   Builder(
                     builder: (_) {
                       final tierColor = Color(tier.colorHex);
-                      final isCurrent = tier.level == snap.bingePersona.tierLevel;
+                      final tierInk = _readableTierInk(tierColor, c);
+                      final isCurrent =
+                          tier.level == snap.bingePersona.tierLevel;
                       final isUnlocked = effectiveHours >= tier.minHours;
-                      final hoursNeeded = max(0, tier.minHours - effectiveHours);
+                      final hoursNeeded =
+                          max(0, tier.minHours - effectiveHours);
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
@@ -165,9 +185,9 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
                           color: isCurrent
                               ? tierColor.withValues(alpha: 0.16)
                               : c.tertiaryBackground
-                                  .withValues(alpha: isUnlocked ? 0.9 : 0.55),
+                                  .withValues(alpha: isUnlocked ? 0.92 : 0.6),
                           shape: MoglogShapes.smooth(
-                            14,
+                            16,
                             side: BorderSide(
                               color: isCurrent
                                   ? tierColor
@@ -179,18 +199,19 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
                         child: Row(
                           children: [
                             Container(
-                              width: 34,
-                              height: 34,
+                              width: 36,
+                              height: 36,
                               decoration: BoxDecoration(
-                                color: tierColor.withValues(alpha: 0.2),
+                                color: tierColor.withValues(alpha: 0.18),
                                 shape: BoxShape.circle,
-                                border: Border.all(color: tierColor, width: 1.2),
+                                border:
+                                    Border.all(color: tierColor, width: 1.2),
                               ),
                               alignment: Alignment.center,
                               child: Text(
                                 '${tier.level}',
                                 style: t.subhead.copyWith(
-                                  color: tierColor,
+                                  color: tierInk,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -200,25 +221,24 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
                                     children: [
-                                      Flexible(
-                                        child: Text(
-                                          tier.badge,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: t.caption2.copyWith(
-                                            color: tierColor,
-                                            fontWeight: FontWeight.w700,
-                                          ),
+                                      Text(
+                                        tier.badge,
+                                        style: t.caption2.copyWith(
+                                          color: tierInk,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                      if (isCurrent) ...[
-                                        const SizedBox(width: 6),
+                                      if (isCurrent)
                                         Container(
                                           padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 1.5,
+                                            horizontal: 7,
+                                            vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
                                             color: tierColor,
@@ -226,21 +246,24 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
                                           ),
                                           child: Text(
                                             'CURRENT',
-                                            style: t.caption2.copyWith(
-                                              color: Colors.black,
-                                              fontSize: 8.5,
+                                            style: t.microBadge.copyWith(
+                                              color: _onTierBadgeColor(
+                                                tierColor,
+                                                c,
+                                              ),
                                               fontWeight: FontWeight.w800,
                                             ),
                                           ),
                                         ),
-                                      ],
                                     ],
                                   ),
                                   const SizedBox(height: 3),
                                   Text(
                                     tier.sampleTitle,
                                     style: t.subhead.copyWith(
-                                      color: isUnlocked ? c.label : c.secondaryLabel,
+                                      color: isUnlocked
+                                          ? c.label
+                                          : c.secondaryLabel,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -263,14 +286,14 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
                                     horizontal: 8,
                                     vertical: 4,
                                   ),
-                                  decoration: BoxDecoration(
+                                  decoration: ShapeDecoration(
                                     color: tierColor.withValues(alpha: 0.16),
-                                    borderRadius: BorderRadius.circular(8),
+                                    shape: MoglogShapes.smooth(8),
                                   ),
                                   child: Text(
                                     tier.hoursRangeLabel,
                                     style: t.caption2.copyWith(
-                                      color: tierColor,
+                                      color: tierInk,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -284,7 +307,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
                                           : '${hoursNeeded}h more'),
                                   style: t.caption2.copyWith(
                                     color: isUnlocked
-                                        ? tierColor
+                                        ? tierInk
                                         : c.tertiaryLabel,
                                   ),
                                 ),
@@ -307,225 +330,242 @@ class _StatsScreenState extends ConsumerState<StatsScreen>
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final reduceMotion = context.reduceMotion;
     final dramas = ref.watch(currentDramasProvider);
     final snap = computeStatsSnapshot(dramas);
     final personaColor = Color(snap.bingePersona.accentColorHex);
+    final personaInk = _readableTierInk(personaColor, c);
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
+    final shellBottomPad = MoglogLayout.shellScrollBottomPadding(context);
 
-    return Scaffold(
-      backgroundColor: c.background,
-      body: Column(
-        children: [
-          IosLargeTitleHeader(
-            title: 'Statistics',
-            collapsed: _headerCollapsed,
-            trailingActions: snap.activeDramas.isNotEmpty
-                ? [
-                    IosCircleIconButton(
-                      icon: MoglogIcons.download,
-                      tooltip: 'Save Wrapped Card to Gallery',
-                      tint: personaColor,
-                      onTap: () => _saveWrappedToGallery(snap),
-                    ),
-                    IosCircleIconButton(
-                      icon: MoglogIcons.share,
-                      tooltip: 'Share Moglog Wrapped',
-                      tint: personaColor,
-                      onTap: () => _shareWrappedCard(snap),
-                    ),
-                  ]
-                : null,
-          ),
-          Expanded(
-            child: snap.activeDramas.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: 72),
-                      child: IosEmptyState(
-                        icon: MoglogIcons.stats,
-                        title: 'Statistics',
-                        subtitle:
-                            'Add shows and log episodes to unlock visual insights into your watching habits.',
+    return TabRetapListener(
+      branchIndex: 2,
+      scrollController: _scrollController,
+      child: Scaffold(
+        backgroundColor: c.background,
+        body: Column(
+          children: [
+            IosLargeTitleHeader(
+              title: 'Statistics',
+              collapsed: _headerCollapsed,
+              trailingActions: snap.activeDramas.isNotEmpty
+                  ? [
+                      IosCircleIconButton(
+                        icon: MoglogIcons.download,
+                        tooltip: 'Save Wrapped Card to Gallery',
+                        tint: personaInk,
+                        onTap: () => _saveWrappedToGallery(snap),
                       ),
-                    ),
-                  )
-                : AnimatedBuilder(
-                    animation: _chartAnimCtrl,
-                    builder: (context, _) {
-                      final progress = Curves.fastOutSlowIn
-                          .transform(_chartAnimCtrl.value);
+                      IosCircleIconButton(
+                        icon: MoglogIcons.share,
+                        tooltip: 'Share Moglog Wrapped',
+                        tint: personaInk,
+                        onTap: () => _shareWrappedCard(snap),
+                      ),
+                    ]
+                  : null,
+            ),
+            Expanded(
+              child: snap.activeDramas.isEmpty
+                  ? Center(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.only(bottom: shellBottomPad * 0.65),
+                        child: const IosEmptyState(
+                          icon: MoglogIcons.stats,
+                          title: 'Statistics',
+                          subtitle:
+                              'Add shows and log episodes to unlock visual insights into your watching habits.',
+                        ),
+                      ),
+                    )
+                  : AnimatedBuilder(
+                      animation: _chartAnimCtrl,
+                      builder: (context, _) {
+                        final progress = reduceMotion
+                            ? 1.0
+                            : Curves.fastOutSlowIn
+                                .transform(_chartAnimCtrl.value);
 
-                      final statusCard = _StatusBreakdownCard(
-                        watching: snap.watchingCount,
-                        planned: snap.plannedCount,
-                        done: snap.doneCount,
-                        animProgress: progress,
-                      );
-                      final genreCard = _GenreBreakdownCard(
-                        genres: snap.genreBreakdown,
-                        animProgress: progress,
-                      );
+                        final statusCard = _StatusBreakdownCard(
+                          watching: snap.watchingCount,
+                          planned: snap.plannedCount,
+                          done: snap.doneCount,
+                          animProgress: progress,
+                        );
+                        final genreCard = _GenreBreakdownCard(
+                          genres: snap.genreBreakdown,
+                          animProgress: progress,
+                        );
 
-                      return ListView(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 108),
-                        children: [
-                          // 1. Moglog Wrapped Hero Card
-                          _WrappedHeroCard(
-                            persona: snap.bingePersona,
-                            topGenre: snap.topGenreName,
-                            hoursWatched: snap.estimatedHours,
-                            onTap: () => _showPrestigeTiersSheet(snap),
+                        return ListView(
+                          controller: _scrollController,
+                          padding: EdgeInsets.fromLTRB(
+                            MoglogSpacing.md,
+                            MoglogSpacing.sm,
+                            MoglogSpacing.md,
+                            shellBottomPad,
                           ),
-                          const SizedBox(height: 16),
-
-                          // 2. 4 Summary Metric Cards
-                          if (isLandscape)
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _MetricCard(
-                                    label: 'Total Shows',
-                                    value: '${snap.activeDramas.length}',
-                                    sub: '${snap.doneCount} completed',
-                                    color: c.accent,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: _MetricCard(
-                                    label: 'Episodes',
-                                    value: '${snap.totalEpisodesWatched}',
-                                    sub: 'logged',
-                                    color: c.statusWatching,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: _MetricCard(
-                                    label: 'Est. Hours',
-                                    value: '${snap.estimatedHours}h',
-                                    sub:
-                                        '~${(snap.estimatedHours / 24.0).toStringAsFixed(1)} days',
-                                    color: c.statusPlanned,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: _MetricCard(
-                                    label: 'Monthly Streak',
-                                    value: '${snap.currentStreakMonths}m',
-                                    sub: 'consecutive',
-                                    color: c.starGold,
-                                  ),
-                                ),
-                              ],
-                            )
-                          else ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _MetricCard(
-                                    label: 'Total Shows',
-                                    value: '${snap.activeDramas.length}',
-                                    sub: '${snap.doneCount} completed',
-                                    color: c.accent,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _MetricCard(
-                                    label: 'Episodes',
-                                    value: '${snap.totalEpisodesWatched}',
-                                    sub: 'logged',
-                                    color: c.statusWatching,
-                                  ),
-                                ),
-                              ],
+                          children: [
+                            // 1. Moglog Wrapped Hero Card
+                            _WrappedHeroCard(
+                              persona: snap.bingePersona,
+                              topGenre: snap.topGenreName,
+                              hoursWatched: snap.estimatedHours,
+                              onTap: () => _showPrestigeTiersSheet(snap),
                             ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _MetricCard(
-                                    label: 'Est. Hours',
-                                    value: '${snap.estimatedHours}h',
-                                    sub:
-                                        '~${(snap.estimatedHours / 24.0).toStringAsFixed(1)} days',
-                                    color: c.statusPlanned,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _MetricCard(
-                                    label: 'Monthly Streak',
-                                    value: '${snap.currentStreakMonths}m',
-                                    sub: 'consecutive',
-                                    color: c.starGold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                          const SizedBox(height: 16),
+                            const SizedBox(height: 16),
 
-                          // 3. Status Breakdown & Top Genres
-                          if (isLandscape)
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(child: statusCard),
-                                const SizedBox(width: 12),
-                                Expanded(child: genreCard),
-                              ],
-                            )
-                          else ...[
-                            statusCard,
-                            if (snap.genreBreakdown.isNotEmpty) ...[
-                              const SizedBox(height: 16),
-                              genreCard,
+                            // 2. 4 Summary Metric Cards
+                            if (isLandscape)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _MetricCard(
+                                      label: 'Total Shows',
+                                      value: '${snap.activeDramas.length}',
+                                      sub: '${snap.doneCount} completed',
+                                      color: c.accentText,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _MetricCard(
+                                      label: 'Episodes',
+                                      value: '${snap.totalEpisodesWatched}',
+                                      sub: 'logged',
+                                      color: c.statusTextColor('Watching'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _MetricCard(
+                                      label: 'Est. Hours',
+                                      value: '${snap.estimatedHours}h',
+                                      sub:
+                                          '~${(snap.estimatedHours / 24.0).toStringAsFixed(1)} days',
+                                      color: c.statusTextColor('Planned'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _MetricCard(
+                                      label: 'Monthly Streak',
+                                      value: '${snap.currentStreakMonths}m',
+                                      sub: 'consecutive',
+                                      color: c.starGold,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            else ...[
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _MetricCard(
+                                      label: 'Total Shows',
+                                      value: '${snap.activeDramas.length}',
+                                      sub: '${snap.doneCount} completed',
+                                      color: c.accentText,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _MetricCard(
+                                      label: 'Episodes',
+                                      value: '${snap.totalEpisodesWatched}',
+                                      sub: 'logged',
+                                      color: c.statusTextColor('Watching'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _MetricCard(
+                                      label: 'Est. Hours',
+                                      value: '${snap.estimatedHours}h',
+                                      sub:
+                                          '~${(snap.estimatedHours / 24.0).toStringAsFixed(1)} days',
+                                      color: c.statusTextColor('Planned'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _MetricCard(
+                                      label: 'Monthly Streak',
+                                      value: '${snap.currentStreakMonths}m',
+                                      sub: 'consecutive',
+                                      color: c.starGold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
-                          ],
-                          const SizedBox(height: 16),
+                            const SizedBox(height: 16),
 
-                          // 4. 12-Month Activity Bar Chart
-                          _MonthlyActivityCard(
-                            buckets: snap.monthlyActivity,
-                            animProgress: progress,
-                          ),
-                          const SizedBox(height: 16),
+                            // 3. Status Breakdown & Top Genres
+                            if (isLandscape)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: statusCard),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: genreCard),
+                                ],
+                              )
+                            else ...[
+                              statusCard,
+                              if (snap.genreBreakdown.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                genreCard,
+                              ],
+                            ],
+                            const SizedBox(height: 16),
 
-                          // 5. Your Highest Rated Top 5
-                          if (snap.topRatedShows.isNotEmpty) ...[
-                            _TopRatedCard(
-                              shows: snap.topRatedShows,
-                              onDramaTap: widget.onDramaTap,
+                            // 4. 12-Month Activity Bar Chart
+                            _MonthlyActivityCard(
+                              buckets: snap.monthlyActivity,
+                              animProgress: progress,
                             ),
                             const SizedBox(height: 16),
-                          ],
 
-                          // 6. Release Radar · Airing Schedule
-                          if (snap.releaseRadarShows.isNotEmpty) ...[
-                            _ReleaseRadarCard(
-                              shows: snap.releaseRadarShows,
-                              onDramaTap: widget.onDramaTap,
-                            ),
-                            const SizedBox(height: 16),
-                          ],
+                            // 5. Your Highest Rated Top 5
+                            if (snap.topRatedShows.isNotEmpty) ...[
+                              _TopRatedCard(
+                                shows: snap.topRatedShows,
+                                onDramaTap: widget.onDramaTap,
+                              ),
+                              const SizedBox(height: 16),
+                            ],
 
-                          // 7. TV Diary Timeline
-                          if (snap.diaryEntries.isNotEmpty)
-                            _TvDiaryTimelineCard(
-                              entries: snap.diaryEntries,
-                              onDramaTap: widget.onDramaTap,
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-          ),
-        ],
+                            // 6. Release Radar · Airing Schedule
+                            if (snap.releaseRadarShows.isNotEmpty) ...[
+                              _ReleaseRadarCard(
+                                shows: snap.releaseRadarShows,
+                                onDramaTap: widget.onDramaTap,
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+
+                            // 7. TV Diary Timeline
+                            if (snap.diaryEntries.isNotEmpty)
+                              _TvDiaryTimelineCard(
+                                entries: snap.diaryEntries,
+                                onDramaTap: widget.onDramaTap,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -549,11 +589,13 @@ class _WrappedHeroCard extends StatelessWidget {
     final c = context.colors;
     final t = context.typo;
     final tierColor = Color(persona.accentColorHex);
+    final tierInk = _readableTierInk(tierColor, c);
     final days = (hoursWatched / 24.0).toStringAsFixed(1);
 
     return IosPressable(
       onTap: onTap,
       hapticOnTap: true,
+      focusRadius: MoglogShapes.cardRadius,
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: ShapeDecoration(
@@ -561,39 +603,61 @@ class _WrappedHeroCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              tierColor.withValues(alpha: 0.22),
+              Color.alphaBlend(
+                tierColor.withValues(alpha: c.isDark ? 0.24 : 0.16),
+                c.secondaryBackground,
+              ),
               c.secondaryBackground,
             ],
           ),
           shape: MoglogShapes.smooth(
-            18,
-            side: BorderSide(color: tierColor.withValues(alpha: 0.45), width: 1.2),
+            MoglogShapes.cardRadius,
+            side: BorderSide(
+              color: tierColor.withValues(alpha: 0.45),
+              width: 1.0,
+            ),
           ),
+          shadows: c.isDark
+              ? null
+              : [
+                  BoxShadow(
+                    color: c.shadowSoft,
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
               children: [
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: tierColor.withValues(alpha: 0.2),
+                    color: tierColor.withValues(alpha: 0.18),
                     borderRadius: MoglogShapes.pill,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(MoglogIcons.award, size: 13, color: tierColor),
+                      Icon(MoglogIcons.award, size: 13, color: tierInk),
                       const SizedBox(width: 5),
-                      Text(
-                        persona.rankBadge,
-                        style: t.caption2.copyWith(
-                          color: tierColor,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
+                      Flexible(
+                        child: Text(
+                          persona.rankBadge,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.caption2.copyWith(
+                            color: tierInk,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ],
@@ -602,7 +666,7 @@ class _WrappedHeroCard extends StatelessWidget {
                 Text(
                   'Rank ${persona.tierLevel}/13 ›',
                   style: t.caption.copyWith(
-                    color: tierColor,
+                    color: tierInk,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -657,28 +721,43 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: ShapeDecoration(
-        color: c.secondaryBackground,
-        shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: t.caption2.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
+    return Semantics(
+      container: true,
+      label: '$label: $value, $sub',
+      child: IosCard(
+        padding: const EdgeInsets.all(15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label.toUpperCase(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: t.caption2.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(value, style: t.title1.copyWith(color: c.label)),
-          const SizedBox(height: 2),
-          Text(sub, style: t.caption2.copyWith(color: c.secondaryLabel)),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: t.title1.copyWith(
+                color: c.label,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              sub,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: t.caption2.copyWith(color: c.secondaryLabel),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -701,66 +780,91 @@ class _StatusBreakdownCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
-    final total = max(1, watching + planned + done);
+    final totalRaw = watching + planned + done;
+    final total = max(1, totalRaw);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final donutDim = 114.0 * textScale.clamp(1.0, 1.25);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: ShapeDecoration(
-        color: c.secondaryBackground,
-        shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Status Breakdown', style: t.headline.copyWith(color: c.label)),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              SizedBox(
-                width: 112,
-                height: 112,
-                child: CustomPaint(
-                  painter: _DonutPainter(
-                    segments: [
-                      (watching / total, c.statusWatching),
-                      (planned / total, c.statusPlanned),
-                      (done / total, c.statusDone),
-                    ],
-                    trackColor: c.tertiaryBackground,
-                    animProgress: animProgress,
+    final donutWidget = SizedBox(
+      width: donutDim,
+      height: donutDim,
+      child: CustomPaint(
+        painter: _DonutPainter(
+          segments: [
+            (watching / total, c.statusWatching),
+            (planned / total, c.statusPlanned),
+            (done / total, c.statusDone),
+          ],
+          trackColor: c.tertiaryBackground,
+          animProgress: animProgress,
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$totalRaw',
+                    style: t.title2.copyWith(color: c.label),
                   ),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${watching + planned + done}',
-                          style: t.title2.copyWith(color: c.label),
-                        ),
-                        Text(
-                          'Shows',
-                          style: t.caption2.copyWith(color: c.secondaryLabel),
-                        ),
-                      ],
-                    ),
+                  Text(
+                    'Shows',
+                    style: t.caption2.copyWith(color: c.secondaryLabel),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(width: 22),
-              Expanded(
-                child: Column(
-                  children: [
-                    _LegendRow('Watching', watching, c.statusWatching),
-                    const SizedBox(height: 10),
-                    _LegendRow('Planned', planned, c.statusPlanned),
-                    const SizedBox(height: 10),
-                    _LegendRow('Done', done, c.statusDone),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-        ],
+        ),
+      ),
+    );
+
+    final legendColumn = Column(
+      children: [
+        _LegendRow('Watching', watching, c.statusWatching),
+        const SizedBox(height: 10),
+        _LegendRow('Planned', planned, c.statusPlanned),
+        const SizedBox(height: 10),
+        _LegendRow('Done', done, c.statusDone),
+      ],
+    );
+
+    return Semantics(
+      container: true,
+      label:
+          'Status Breakdown chart: $totalRaw total shows. Watching $watching, Planned $planned, Done $done.',
+      child: IosCard(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stackVertical =
+                constraints.maxWidth < 290 || textScale > 1.6;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Status Breakdown',
+                  style: t.headline.copyWith(color: c.label),
+                ),
+                const SizedBox(height: 16),
+                if (stackVertical) ...[
+                  Center(child: donutWidget),
+                  const SizedBox(height: 16),
+                  legendColumn,
+                ] else
+                  Row(
+                    children: [
+                      donutWidget,
+                      const SizedBox(width: 22),
+                      Expanded(child: legendColumn),
+                    ],
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -786,11 +890,21 @@ class _LegendRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(label, style: t.subhead.copyWith(color: c.label)),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: t.subhead.copyWith(color: c.label),
+          ),
         ),
+        const SizedBox(width: 6),
         Text(
           '$count',
-          style: t.subhead.copyWith(color: c.label, fontWeight: FontWeight.w700),
+          style: t.subhead.copyWith(
+            color: c.label,
+            fontWeight: FontWeight.w700,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
         ),
       ],
     );
@@ -863,45 +977,54 @@ class _GenreBreakdownCard extends StatelessWidget {
     final c = context.colors;
     final t = context.typo;
     final maxCount = genres.isEmpty ? 1 : max(1, genres.first.value);
+    final summary = genres.map((e) => '${e.key}: ${e.value}').join(', ');
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: ShapeDecoration(
-        color: c.secondaryBackground,
-        shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Top Genres', style: t.headline.copyWith(color: c.label)),
-          const SizedBox(height: 12),
-          for (final entry in genres) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(entry.key, style: t.footnote.copyWith(color: c.label)),
-                Text(
-                  '${entry.value}',
-                  style: t.footnote.copyWith(
-                    color: c.secondaryLabel,
-                    fontWeight: FontWeight.w600,
+    return Semantics(
+      container: true,
+      label: 'Top Genres breakdown: $summary',
+      child: IosCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Top Genres', style: t.headline.copyWith(color: c.label)),
+            const SizedBox(height: 12),
+            for (final entry in genres) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      entry.key,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.footnote.copyWith(color: c.label),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 5),
-            ClipRRect(
-              borderRadius: MoglogShapes.pill,
-              child: LinearProgressIndicator(
-                value: (entry.value / maxCount) * animProgress,
-                minHeight: 7,
-                backgroundColor: c.tertiaryBackground,
-                color: c.accent,
+                  const SizedBox(width: 8),
+                  Text(
+                    '${entry.value}',
+                    style: t.footnote.copyWith(
+                      color: c.secondaryLabel,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 10),
+              const SizedBox(height: 5),
+              ClipRRect(
+                borderRadius: MoglogShapes.pill,
+                child: LinearProgressIndicator(
+                  value: (entry.value / maxCount) * animProgress,
+                  minHeight: 7,
+                  backgroundColor: c.tertiaryBackground,
+                  color: c.accent,
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -920,64 +1043,75 @@ class _MonthlyActivityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final maxVal = buckets.fold<int>(1, (acc, b) => max(acc, b.count));
+    final totalLogged = buckets.fold<int>(0, (acc, b) => acc + b.count);
+    final activeMonths = buckets.where((b) => b.count > 0).length;
+    final chartHeight =
+        120.0 + ((textScale - 1.0).clamp(0.0, 1.0) * 48.0);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: ShapeDecoration(
-        color: c.secondaryBackground,
-        shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Completions & Activity (Last 12 Months)',
-            style: t.headline.copyWith(color: c.label),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 112,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: buckets.map((b) {
-                final hFrac = b.count == 0 ? 0.04 : (b.count / maxVal);
-                return Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      if (b.count > 0)
-                        Text(
-                          '${b.count}',
-                          style: t.caption2.copyWith(
-                            color: c.secondaryLabel,
-                            fontSize: 9.5,
+    return Semantics(
+      container: true,
+      label:
+          'Completions and Activity over the last 12 months: $totalLogged shows updated or completed across $activeMonths active months.',
+      child: IosCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Completions & Activity (Last 12 Months)',
+              style: t.headline.copyWith(color: c.label),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: chartHeight,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: buckets.map((b) {
+                  final hFrac = b.count == 0 ? 0.05 : (b.count / maxVal);
+                  return Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (b.count > 0)
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '${b.count}',
+                              style: t.microBadge.copyWith(
+                                color: c.secondaryLabel,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 3),
+                        Container(
+                          width: 13,
+                          height: max(4.0, 72.0 * hFrac * animProgress),
+                          decoration: ShapeDecoration(
+                            color: b.count > 0
+                                ? c.accent
+                                : c.tertiaryBackground,
+                            shape: MoglogShapes.smooth(5),
                           ),
                         ),
-                      const SizedBox(height: 3),
-                      Container(
-                        width: 14,
-                        height: max(4.0, 74.0 * hFrac * animProgress),
-                        decoration: BoxDecoration(
-                          color: b.count > 0 ? c.accent : c.tertiaryBackground,
-                          borderRadius: BorderRadius.circular(5),
+                        const SizedBox(height: 5),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            b.monthLabel[0],
+                            style: t.microBadge.copyWith(
+                              color: c.secondaryLabel,
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        b.monthLabel[0],
-                        style: t.caption2.copyWith(
-                          color: c.tertiaryLabel,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -993,11 +1127,8 @@ class _TopRatedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
-    return Container(
-      decoration: ShapeDecoration(
-        color: c.secondaryBackground,
-        shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-      ),
+    return IosCard(
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1011,46 +1142,54 @@ class _TopRatedCard extends StatelessWidget {
           for (var i = 0; i < shows.length; i++) ...[
             IosPressable(
               onTap: () => onDramaTap(shows[i].id),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 22,
-                      child: Text(
-                        '${i + 1}',
-                        style: t.headline.copyWith(color: c.accent),
-                      ),
-                    ),
-                    PosterImage(
-                      url: shows[i].posterPath.replaceFirst('/w500/', '/w185/'),
-                      width: 34,
-                      height: 48,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        shows[i].title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: t.subhead.copyWith(
-                          color: c.label,
-                          fontWeight: FontWeight.w600,
+              hapticOnTap: true,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        child: Text(
+                          '${i + 1}',
+                          style: t.headline.copyWith(color: c.accentText),
                         ),
                       ),
-                    ),
-                    Icon(MoglogIcons.starFilled, size: 14, color: c.starGold),
-                    const SizedBox(width: 4),
-                    Text(
-                      shows[i].effectiveRating.toStringAsFixed(1),
-                      style: t.subhead.copyWith(
-                        color: c.label,
-                        fontWeight: FontWeight.w700,
+                      PosterImage(
+                        url: shows[i]
+                            .posterPath
+                            .replaceFirst('/w500/', '/w185/'),
+                        width: 36,
+                        height: 50,
+                        borderRadius:
+                            const BorderRadius.all(Radius.circular(7)),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          shows[i].title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.subhead.copyWith(
+                            color: c.label,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(MoglogIcons.starFilled, size: 14, color: c.starGold),
+                      const SizedBox(width: 4),
+                      Text(
+                        shows[i].effectiveRating.toStringAsFixed(1),
+                        style: t.subhead.copyWith(
+                          color: c.label,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1059,7 +1198,7 @@ class _TopRatedCard extends StatelessWidget {
                 height: c.hairlineWidth,
                 thickness: c.hairlineWidth,
                 color: c.separator,
-                indent: 62,
+                indent: 68,
               ),
           ],
         ],
@@ -1078,11 +1217,8 @@ class _ReleaseRadarCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
-    return Container(
-      decoration: ShapeDecoration(
-        color: c.secondaryBackground,
-        shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-      ),
+    return IosCard(
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1090,11 +1226,13 @@ class _ReleaseRadarCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
               children: [
-                Icon(MoglogIcons.calendar, size: 17, color: c.accent),
+                Icon(MoglogIcons.calendar, size: 18, color: c.accentText),
                 const SizedBox(width: 8),
-                Text(
-                  'Release Radar · Airing Schedule',
-                  style: t.headline.copyWith(color: c.label),
+                Expanded(
+                  child: Text(
+                    'Release Radar · Airing Schedule',
+                    style: t.headline.copyWith(color: c.label),
+                  ),
                 ),
               ],
             ),
@@ -1103,66 +1241,80 @@ class _ReleaseRadarCard extends StatelessWidget {
             Builder(
               builder: (_) {
                 final d = shows[i];
-                final countdown = computeAiringCountdownLabel(d.nextEpisodeAirDate) ??
-                    (d.nextEpisodeAirDate ?? '');
-                final epLabel = (d.nextSeasonNumber > 0 && d.nextEpisodeNumber > 0)
-                    ? 'S${d.nextSeasonNumber.toString().padLeft(2, "0")}E${d.nextEpisodeNumber.toString().padLeft(2, "0")}'
-                    : 'Next Episode';
+                final countdown =
+                    computeAiringCountdownLabel(d.nextEpisodeAirDate) ??
+                        (d.nextEpisodeAirDate ?? '');
+                final epLabel =
+                    (d.nextSeasonNumber > 0 && d.nextEpisodeNumber > 0)
+                        ? 'S${d.nextSeasonNumber.toString().padLeft(2, "0")}E${d.nextEpisodeNumber.toString().padLeft(2, "0")}'
+                        : 'Next Episode';
 
                 return IosPressable(
                   onTap: () => onDramaTap(d.id),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      children: [
-                        PosterImage(
-                          url: d.posterPath.replaceFirst('/w500/', '/w185/'),
-                          width: 36,
-                          height: 50,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                d.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: t.subhead.copyWith(
-                                  color: c.label,
-                                  fontWeight: FontWeight.w600,
+                  hapticOnTap: true,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 58),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          PosterImage(
+                            url: d.posterPath.replaceFirst('/w500/', '/w185/'),
+                            width: 36,
+                            height: 50,
+                            borderRadius:
+                                const BorderRadius.all(Radius.circular(7)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  d.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: t.subhead.copyWith(
+                                    color: c.label,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                '$epLabel · Airs ${d.nextEpisodeAirDate}',
-                                style: t.caption.copyWith(color: c.secondaryLabel),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: c.accent.withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                          child: Text(
-                            countdown,
-                            style: t.caption2.copyWith(
-                              color: c.accent,
-                              fontWeight: FontWeight.w700,
+                                Text(
+                                  '$epLabel · Airs ${d.nextEpisodeAirDate}',
+                                  style: t.caption
+                                      .copyWith(color: c.secondaryLabel),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 112),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: ShapeDecoration(
+                                color: c.accentSubtle,
+                                shape: MoglogShapes.smooth(8),
+                              ),
+                              child: Text(
+                                countdown,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: t.caption2.copyWith(
+                                  color: c.accentText,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -1197,26 +1349,35 @@ class _TvDiaryTimelineCard extends StatelessWidget {
     final t = context.typo;
     final fmt = DateFormat('MMM d, yyyy', 'en_US');
 
-    return Container(
-      decoration: ShapeDecoration(
-        color: c.secondaryBackground,
-        shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-      ),
+    return IosCard(
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(MoglogIcons.clock, size: 17, color: c.statusWatching),
+                    Icon(
+                      MoglogIcons.clock,
+                      size: 18,
+                      color: c.statusTextColor('Watching'),
+                    ),
                     const SizedBox(width: 8),
-                    Text(
-                      'TV Diary Timeline',
-                      style: t.headline.copyWith(color: c.label),
+                    Flexible(
+                      child: Text(
+                        'TV Diary Timeline',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.headline.copyWith(color: c.label),
+                      ),
                     ),
                   ],
                 ),
@@ -1246,47 +1407,53 @@ class _TvDiaryTimelineCard extends StatelessWidget {
 
                 return IosPressable(
                   onTap: () => onDramaTap(d.id),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            color: c.statusColor(d.status),
-                            shape: BoxShape.circle,
+                  hapticOnTap: true,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 54),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 9,
+                            height: 9,
+                            decoration: BoxDecoration(
+                              color: c.statusColor(d.status),
+                              shape: BoxShape.circle,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                d.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: t.subhead.copyWith(
-                                  color: c.label,
-                                  fontWeight: FontWeight.w600,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  d.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: t.subhead.copyWith(
+                                    color: c.label,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                desc,
-                                style: t.caption.copyWith(color: c.secondaryLabel),
-                              ),
-                            ],
+                                Text(
+                                  desc,
+                                  style: t.caption
+                                      .copyWith(color: c.secondaryLabel),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        Text(
-                          dateStr,
-                          style: t.caption2.copyWith(color: c.tertiaryLabel),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Text(
+                            dateStr,
+                            style: t.caption2.copyWith(color: c.secondaryLabel),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );

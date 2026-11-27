@@ -12,6 +12,7 @@ import '../../core/design_system/icons.dart';
 import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/design_system/tokens.dart';
 import '../../core/network/image_cache_manager.dart';
 import 'widgets/profile_photo_dialogs.dart';
 
@@ -27,11 +28,35 @@ class AccountSettingsScreen extends ConsumerStatefulWidget {
 
 class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
   final ImagePicker _imagePicker = ImagePicker();
+  final ScrollController _scrollController = ScrollController();
+  bool _headerCollapsed = false;
   bool _signingIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final offset = _scrollController.offset;
+    if (!_headerCollapsed && offset > 48) {
+      setState(() => _headerCollapsed = true);
+    } else if (_headerCollapsed && offset < 14) {
+      setState(() => _headerCollapsed = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickAndCropImage(ImageSource source) async {
     try {
-      final picked = await _imagePicker.pickImage(source: source, maxWidth: 1600);
+      final picked =
+          await _imagePicker.pickImage(source: source, maxWidth: 1600);
       if (picked == null || !mounted) return;
       final bytes = await picked.readAsBytes();
       if (!mounted) return;
@@ -115,48 +140,68 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     showIosBottomSheet<void>(
       disposeAfter: [ctrl],
       context: context,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Edit Display Name',
-              style: ctx.typo.title3.copyWith(color: ctx.colors.label),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: ctx.colors.tertiaryBackground,
-                borderRadius: MoglogShapes.control,
+      builder: (ctx) {
+        final c = ctx.colors;
+        final t = ctx.typo;
+        return SingleChildScrollView(
+          padding: MoglogSpacing.sheetPadding,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Edit Display Name',
+                style: t.title3.copyWith(color: c.label),
               ),
-              child: TextField(
-                controller: ctrl,
-                maxLength: 40,
-                autofocus: true,
-                style: ctx.typo.body.copyWith(color: ctx.colors.label),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Your display name',
+              const SizedBox(height: 14),
+              Container(
+                constraints: const BoxConstraints(minHeight: 46),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: ShapeDecoration(
+                  color: c.tertiaryBackground,
+                  shape: MoglogShapes.smooth(
+                    MoglogShapes.controlRadius,
+                    side: BorderSide(
+                      color: c.glassBorder,
+                      width: c.hairlineWidth,
+                    ),
+                  ),
+                ),
+                alignment: Alignment.centerLeft,
+                child: TextField(
+                  controller: ctrl,
+                  maxLength: 40,
+                  autofocus: true,
+                  cursorColor: c.accent,
+                  style: t.body.copyWith(color: c.label),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    counterText: '',
+                    hintText: 'Your display name',
+                    hintStyle: t.subhead.copyWith(color: c.tertiaryLabel),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            IosPrimaryButton(
-              text: 'Save',
-              onTap: () async {
-                final name = ctrl.text.trim();
-                Navigator.of(ctx).pop();
-                await ref.read(settingsStoreProvider).setCustomDisplayName(name);
-                await ref.read(authControllerProvider.notifier).syncProfileOnly();
-                ref.read(toastProvider.notifier).show('Display name saved');
-              },
-            ),
-          ],
-        ),
-      ),
+              const SizedBox(height: 16),
+              IosPrimaryButton(
+                text: 'Save',
+                onTap: () async {
+                  final name = ctrl.text.trim();
+                  Navigator.of(ctx).pop();
+                  await ref
+                      .read(settingsStoreProvider)
+                      .setCustomDisplayName(name);
+                  await ref
+                      .read(authControllerProvider.notifier)
+                      .syncProfileOnly();
+                  ref.read(toastProvider.notifier).show('Display name saved');
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -175,7 +220,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
           final c = ctx.colors;
           final t = ctx.typo;
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            padding: MoglogSpacing.sheetPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -197,19 +242,21 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Protects your encrypted cloud backups (min 6 chars).',
-                  style: t.caption.copyWith(color: c.secondaryLabel, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  'Protects your encrypted cloud backups (minimum 6 characters).',
+                  style: t.caption.copyWith(color: c.secondaryLabel),
                 ),
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  padding: const EdgeInsets.only(left: 14, right: 4),
+                  decoration: ShapeDecoration(
                     color: c.tertiaryBackground,
-                    borderRadius: MoglogShapes.control,
-                    border: Border.all(
-                      color: error != null ? c.destructive : c.separator,
+                    shape: MoglogShapes.smooth(
+                      MoglogShapes.controlRadius,
+                      side: BorderSide(
+                        color: error != null ? c.destructive : c.glassBorder,
+                        width: error != null ? 1.2 : c.hairlineWidth,
+                      ),
                     ),
                   ),
                   child: Row(
@@ -218,17 +265,21 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                         child: TextField(
                           controller: ctrl,
                           obscureText: obscure,
+                          cursorColor: c.accent,
                           style: t.body.copyWith(color: c.label),
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             border: InputBorder.none,
                             hintText: 'Enter passphrase (min 6 chars)',
+                            hintStyle:
+                                t.subhead.copyWith(color: c.tertiaryLabel),
                           ),
                         ),
                       ),
                       IconButton(
+                        tooltip: obscure ? 'Show passphrase' : 'Hide passphrase',
                         icon: Icon(
                           obscure ? MoglogIcons.eye : MoglogIcons.eyeOff,
-                          size: 18,
+                          size: 19,
                           color: c.secondaryLabel,
                         ),
                         onPressed: () =>
@@ -239,7 +290,10 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 8),
-                  Text(error!, style: t.footnote.copyWith(color: c.destructive)),
+                  Text(
+                    error!,
+                    style: t.footnote.copyWith(color: c.destructive),
+                  ),
                 ],
                 const SizedBox(height: 16),
                 IosPrimaryButton(
@@ -248,11 +302,14 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     final pass = ctrl.text.trim();
                     if (pass.length < 6) {
                       setSheetState(
-                        () => error = 'Passphrase must be at least 6 characters.',
+                        () =>
+                            error = 'Passphrase must be at least 6 characters.',
                       );
                       return;
                     }
-                    await ref.read(secureStoreProvider).setBackupPassphrase(pass);
+                    await ref
+                        .read(secureStoreProvider)
+                        .setBackupPassphrase(pass);
                     if (enableE2eOnSave) {
                       await ref
                           .read(settingsStoreProvider)
@@ -305,7 +362,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
 
   Future<void> _handleRestoreFromCloud() async {
     try {
-      final data = await ref.read(authControllerProvider.notifier).fetchFromCloud();
+      final data =
+          await ref.read(authControllerProvider.notifier).fetchFromCloud();
       final count = data?.dramas.length ?? 0;
       ref.read(toastProvider.notifier).show('Restored $count shows from Cloud');
     } catch (e) {
@@ -319,7 +377,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     showIosActionSheet(
       context: context,
       title: 'Delete Cloud Account & Data',
-      message: 'Choose whether to keep your local encrypted library on this device.',
+      message:
+          'Choose whether to keep your local encrypted library on this device.',
       actions: [
         ActionSheetItem(
           label: 'Delete Cloud Only (Keep Local Library)',
@@ -379,7 +438,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     ImageProvider? avatarImg;
     if (settings.customProfileImageBase64.trim().isNotEmpty) {
       try {
-        avatarImg = MemoryImage(base64Decode(settings.customProfileImageBase64));
+        avatarImg =
+            MemoryImage(base64Decode(settings.customProfileImageBase64));
       } catch (_) {}
     } else if ((user?.photoURL ?? '').isNotEmpty) {
       avatarImg = CachedNetworkImageProvider(
@@ -398,44 +458,52 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
         children: [
           IosLargeTitleHeader(
             title: 'Account & Cloud',
-            collapsed: true,
+            collapsed: _headerCollapsed,
             leadingActions: IosCircleIconButton(
               icon: MoglogIcons.chevronLeft,
+              tooltip: 'Back',
               onTap: widget.onBack,
             ),
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(
+                MoglogSpacing.md,
+                MoglogSpacing.sm,
+                MoglogSpacing.md,
+                56,
+              ),
               children: [
                 // Hero Identity Card
-                Container(
+                IosCard(
                   padding: const EdgeInsets.all(20),
-                  decoration: ShapeDecoration(
-                    color: c.secondaryBackground,
-                    shape: MoglogShapes.smooth(18),
-                  ),
                   child: Column(
                     children: [
                       IosPressable(
+                        semanticLabel: 'Change profile photo',
                         onTap: _showProfilePhotoSheet,
+                        focusRadius: MoglogShapes.pillRadius,
                         child: Stack(
                           children: [
                             CircleAvatar(
-                              radius: 40,
+                              radius: 42,
                               backgroundColor: c.tertiaryBackground,
                               backgroundImage: avatarImg,
                               child: avatarImg == null
-                                  ? Icon(MoglogIcons.person,
-                                      size: 36, color: c.accent)
+                                  ? Icon(
+                                      MoglogIcons.person,
+                                      size: 36,
+                                      color: c.accentText,
+                                    )
                                   : null,
                             ),
                             Positioned(
                               right: 0,
                               bottom: 0,
                               child: Container(
-                                width: 26,
-                                height: 26,
+                                width: 28,
+                                height: 28,
                                 decoration: BoxDecoration(
                                   color: c.accent,
                                   shape: BoxShape.circle,
@@ -456,34 +524,26 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Text(displayName, style: t.title2.copyWith(color: c.label)),
+                      Text(
+                        displayName,
+                        textAlign: TextAlign.center,
+                        style: t.title2.copyWith(color: c.label),
+                      ),
                       if (user?.email != null) ...[
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
                           user!.email!,
+                          textAlign: TextAlign.center,
                           style: t.footnote.copyWith(color: c.secondaryLabel),
                         ),
                       ],
-                      const SizedBox(height: 12),
-                      IosPressable(
+                      const SizedBox(height: 14),
+                      IosSecondaryButton(
+                        text: 'Edit Profile & Name',
+                        size: MoglogButtonSize.small,
+                        expand: false,
+                        textColor: c.accentText,
                         onTap: _showProfilePhotoSheet,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: c.tertiaryBackground,
-                            borderRadius: MoglogShapes.pill,
-                          ),
-                          child: Text(
-                            'Edit Profile & Name',
-                            style: t.caption.copyWith(
-                              color: c.accent,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -527,8 +587,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                         subtitle: 'Merge cloud backup to this device',
                         icon: MoglogIcons.download,
                         iconBackground: c.statusPlanned,
-                        onTap:
-                            authState.isSyncing ? null : _handleRestoreFromCloud,
+                        onTap: authState.isSyncing
+                            ? null
+                            : _handleRestoreFromCloud,
                       ),
                       IosSwitchRow(
                         title: 'Encrypted Cloud Backup',
@@ -552,7 +613,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                         title: 'Backup Passphrase',
                         subtitle: hasPassphrase ? 'Configured' : 'Not Set',
                         icon: MoglogIcons.key,
-                        iconBackground: c.tertiaryBackground,
+                        iconBackground: c.secondaryLabel,
                         showChevron: true,
                         showDivider: false,
                         onTap: () => _showPassphraseSheet(),

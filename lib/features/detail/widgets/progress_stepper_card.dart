@@ -2,14 +2,16 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/design_system/components.dart';
 import '../../../core/design_system/icons.dart';
 import '../../../core/design_system/motion_haptics.dart';
 import '../../../core/design_system/shapes.dart';
 import '../../../core/design_system/theme.dart';
+import '../../../core/design_system/tokens.dart';
 import '../../../domain/logic/season_progress.dart';
 import '../../../domain/model/drama_extra_details.dart';
 
-/// 1:1 port of Kotlin `ProgressStepperCard.kt`.
+/// Multi-season episode progress stepper card wrapped in `IosCard` (squircle 20).
 class ProgressStepperCard extends StatelessWidget {
   final int episodesWatched;
   final int totalEpisodes;
@@ -42,6 +44,14 @@ class ProgressStepperCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
+    final onAccentSafe =
+        ThemeData.estimateBrightnessForColor(accentColor) == Brightness.dark
+            ? c.onMedia
+            : MoglogColors.light.onAccent;
+    final readableAccent = (!c.isDark &&
+            HSLColor.fromColor(accentColor).lightness > 0.36)
+        ? HSLColor.fromColor(accentColor).withLightness(0.32).toColor()
+        : accentColor;
 
     final resolvedSeasons = resolveSeasonBreakdown(
       seasons: seasons,
@@ -60,10 +70,11 @@ class ProgressStepperCard extends StatelessWidget {
             .where((s) => s.seasonNumber < currentSeason)
             .fold<int>(0, (sum, s) => sum + s.episodeCount);
 
-    final seasonTotalEpisodes =
-        (isMultiSeason && activeSeasonInfo != null && activeSeasonInfo.episodeCount > 0)
-            ? activeSeasonInfo.episodeCount
-            : totalEpisodes;
+    final seasonTotalEpisodes = (isMultiSeason &&
+            activeSeasonInfo != null &&
+            activeSeasonInfo.episodeCount > 0)
+        ? activeSeasonInfo.episodeCount
+        : totalEpisodes;
 
     final displayedWatched = (isMultiSeason && seasonTotalEpisodes > 0)
         ? (episodesWatched - seasonOffset).clamp(0, seasonTotalEpisodes)
@@ -88,7 +99,9 @@ class ProgressStepperCard extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 290;
+        final isCompact = constraints.maxWidth < 300;
+        final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+        final stackStepper = isCompact || textScale > 1.45;
 
         String subtitle;
         if (isMultiSeason && seasonTotalEpisodes > 0) {
@@ -101,139 +114,156 @@ class ProgressStepperCard extends StatelessWidget {
           subtitle = '$episodesWatched episodes watched';
         }
 
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
+        final headerLabels = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isMultiSeason
+                  ? 'Episode Progress · S$currentSeason'
+                  : 'Episode Progress',
+              style: (isCompact ? t.subhead : t.headline).copyWith(
+                color: c.label,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: (isCompact ? t.caption : t.footnote).copyWith(
+                color: c.secondaryLabel,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        );
+
+        final stepperControl = Container(
+          padding: const EdgeInsets.all(4),
           decoration: ShapeDecoration(
-            color: c.secondaryBackground,
-            shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
+            color: c.tertiaryBackground,
+            shape: MoglogShapes.smooth(
+              MoglogShapes.controlRadius,
+              side: BorderSide(color: c.glassBorder, width: c.hairlineWidth),
+            ),
           ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IosPressable(
+                enabled: canDecrement,
+                semanticLabel: 'Decrease watched episodes',
+                onTap: () {
+                  MoglogHaptics.tickMinus();
+                  if (isMultiSeason && seasonTotalEpisodes > 0) {
+                    final nextInSeason = max(0, displayedWatched - 1);
+                    onEpisodesWatchedChange(
+                      max(0, seasonOffset + nextInSeason),
+                    );
+                  } else {
+                    onEpisodesWatchedChange(max(0, episodesWatched - 1));
+                  }
+                },
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 42, minHeight: 38),
+                  child: DecoratedBox(
+                    decoration: ShapeDecoration(
+                      color: c.secondaryBackground,
+                      shape: MoglogShapes.smooth(9),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        MoglogIcons.minus,
+                        size: 17,
+                        color: canDecrement ? c.label : c.tertiaryLabel,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: isCompact ? 10 : 14),
+                child: Text(
+                  '$displayedWatched',
+                  style: t.headline.copyWith(color: c.label),
+                ),
+              ),
+              IosPressable(
+                enabled: canIncrement,
+                semanticLabel: 'Increase watched episodes',
+                onTap: () {
+                  MoglogHaptics.clickPlus();
+                  if (isMultiSeason && seasonTotalEpisodes > 0) {
+                    final nextInSeason =
+                        min(seasonTotalEpisodes, displayedWatched + 1);
+                    final newGlobal = seasonOffset + nextInSeason;
+                    onEpisodesWatchedChange(
+                      totalEpisodes > 0
+                          ? min(totalEpisodes, newGlobal)
+                          : newGlobal,
+                    );
+                  } else {
+                    final next = episodesWatched + 1;
+                    onEpisodesWatchedChange(
+                      totalEpisodes > 0 ? min(totalEpisodes, next) : next,
+                    );
+                  }
+                },
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 42, minHeight: 38),
+                  child: canIncrement
+                      ? GlossSurface(
+                          baseColor: accentColor,
+                          cornerRadius: 9,
+                          minHeight: 38,
+                          showGlow: false,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Icon(
+                            MoglogIcons.plus,
+                            size: 17,
+                            color: onAccentSafe,
+                          ),
+                        )
+                      : DecoratedBox(
+                          decoration: ShapeDecoration(
+                            color: c.secondaryBackground,
+                            shape: MoglogShapes.smooth(9),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              MoglogIcons.plus,
+                              size: 17,
+                              color: c.tertiaryLabel,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        return IosCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isMultiSeason
-                              ? 'Episode Progress · S$currentSeason'
-                              : 'Episode Progress',
-                          style: t.headline.copyWith(
-                            color: c.label,
-                            fontSize: isCompact ? 15 : 17,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: t.footnote.copyWith(
-                            color: c.secondaryLabel,
-                            fontSize: isCompact ? 11.5 : 13,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // - / count / + stepper pill
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: c.tertiaryBackground,
-                      borderRadius: MoglogShapes.control,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IosPressable(
-                          enabled: canDecrement,
-                          onTap: () {
-                            MoglogHaptics.tickMinus();
-                            if (isMultiSeason && seasonTotalEpisodes > 0) {
-                              final nextInSeason = max(0, displayedWatched - 1);
-                              onEpisodesWatchedChange(
-                                max(0, seasonOffset + nextInSeason),
-                              );
-                            } else {
-                              onEpisodesWatchedChange(max(0, episodesWatched - 1));
-                            }
-                          },
-                          child: Container(
-                            width: isCompact ? 34 : 40,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: c.secondaryBackground,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              MoglogIcons.minus,
-                              size: 16,
-                              color: canDecrement ? c.label : c.tertiaryLabel,
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isCompact ? 8 : 12,
-                          ),
-                          child: Text(
-                            '$displayedWatched',
-                            style: t.headline.copyWith(
-                              color: c.label,
-                              fontSize: isCompact ? 15 : 17,
-                            ),
-                          ),
-                        ),
-                        IosPressable(
-                          enabled: canIncrement,
-                          onTap: () {
-                            MoglogHaptics.clickPlus();
-                            if (isMultiSeason && seasonTotalEpisodes > 0) {
-                              final nextInSeason =
-                                  min(seasonTotalEpisodes, displayedWatched + 1);
-                              final newGlobal = seasonOffset + nextInSeason;
-                              onEpisodesWatchedChange(
-                                totalEpisodes > 0
-                                    ? min(totalEpisodes, newGlobal)
-                                    : newGlobal,
-                              );
-                            } else {
-                              final next = episodesWatched + 1;
-                              onEpisodesWatchedChange(
-                                totalEpisodes > 0 ? min(totalEpisodes, next) : next,
-                              );
-                            }
-                          },
-                          child: Container(
-                            width: isCompact ? 34 : 40,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: canIncrement
-                                  ? accentColor
-                                  : c.secondaryBackground,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              MoglogIcons.plus,
-                              size: 16,
-                              color: canIncrement ? c.onAccent : c.tertiaryLabel,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+              if (stackStepper) ...[
+                headerLabels,
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: stepperControl,
+                ),
+              ] else
+                Row(
+                  children: [
+                    Expanded(child: headerLabels),
+                    const SizedBox(width: 10),
+                    stepperControl,
+                  ],
+                ),
               const SizedBox(height: 14),
               ClipRRect(
                 borderRadius: MoglogShapes.pill,
@@ -257,7 +287,10 @@ class ProgressStepperCard extends StatelessWidget {
                   runSpacing: 8,
                   children: (resolvedSeasons.isNotEmpty
                           ? resolvedSeasons.map((s) => s.seasonNumber).toList()
-                          : List<int>.generate(min(seasonCount, 20), (i) => i + 1))
+                          : List<int>.generate(
+                              min(seasonCount, 20),
+                              (i) => i + 1,
+                            ))
                       .map((sNum) {
                     final isSelected = currentSeason == sNum;
                     final sOffset = resolvedSeasons
@@ -272,40 +305,55 @@ class ProgressStepperCard extends StatelessWidget {
                         sCount > 0 && episodesWatched >= (sOffset + sCount);
 
                     return IosPressable(
+                      semanticSelected: isSelected,
+                      semanticLabel: isSeasonDone
+                          ? 'Season $sNum, completed'
+                          : 'Season $sNum',
                       onTap: () {
                         MoglogHaptics.selectionChanged();
                         onSeasonChange(sNum);
                       },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? accentColor
-                              : (isSeasonDone
-                                  ? accentColor.withValues(alpha: 0.16)
-                                  : c.tertiaryBackground),
-                          borderRadius: BorderRadius.circular(8),
-                          border: (!isSelected && isSeasonDone)
-                              ? Border.all(
-                                  color: accentColor.withValues(alpha: 0.55),
-                                  width: 1,
-                                )
-                              : null,
-                        ),
-                        child: Text(
-                          isSeasonDone ? '✓ S$sNum' : 'S$sNum',
-                          style: t.caption.copyWith(
-                            fontWeight: (isSelected || isSeasonDone)
-                                ? FontWeight.w700
-                                : FontWeight.w500,
+                      child: ConstrainedBox(
+                        constraints:
+                            const BoxConstraints(minWidth: 44, minHeight: 34),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 11,
+                            vertical: 6,
+                          ),
+                          decoration: ShapeDecoration(
                             color: isSelected
-                                ? c.onAccent
+                                ? accentColor
                                 : (isSeasonDone
-                                    ? accentColor
-                                    : c.secondaryLabel),
+                                    ? accentColor.withValues(alpha: 0.15)
+                                    : c.tertiaryBackground),
+                            shape: MoglogShapes.smooth(
+                              9,
+                              side: (!isSelected && isSeasonDone)
+                                  ? BorderSide(
+                                      color:
+                                          accentColor.withValues(alpha: 0.55),
+                                      width: 1,
+                                    )
+                                  : BorderSide(
+                                      color: c.glassBorder,
+                                      width: c.hairlineWidth,
+                                    ),
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            isSeasonDone ? '✓ S$sNum' : 'S$sNum',
+                            style: t.caption.copyWith(
+                              fontWeight: (isSelected || isSeasonDone)
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: isSelected
+                                  ? onAccentSafe
+                                  : (isSeasonDone
+                                      ? readableAccent
+                                      : c.secondaryLabel),
+                            ),
                           ),
                         ),
                       ),
@@ -319,15 +367,21 @@ class ProgressStepperCard extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
-                    vertical: 9,
+                    vertical: 10,
                   ),
-                  decoration: BoxDecoration(
+                  decoration: ShapeDecoration(
                     color: c.tertiaryBackground,
-                    borderRadius: MoglogShapes.control,
+                    shape: MoglogShapes.smooth(
+                      MoglogShapes.controlRadius,
+                      side: BorderSide(
+                        color: c.glassBorder,
+                        width: c.hairlineWidth,
+                      ),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      Icon(MoglogIcons.bell, size: 16, color: accentColor),
+                      Icon(MoglogIcons.bell, size: 16, color: readableAccent),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(

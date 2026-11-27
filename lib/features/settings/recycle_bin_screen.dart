@@ -6,17 +6,46 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/design_system/components.dart';
 import '../../core/design_system/icons.dart';
-import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/design_system/tokens.dart';
 
-class RecycleBinScreen extends ConsumerWidget {
+class RecycleBinScreen extends ConsumerStatefulWidget {
   final VoidCallback onBack;
 
   const RecycleBinScreen({super.key, required this.onBack});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RecycleBinScreen> createState() => _RecycleBinScreenState();
+}
+
+class _RecycleBinScreenState extends ConsumerState<RecycleBinScreen> {
+  final ScrollController _scrollController = ScrollController();
+  bool _headerCollapsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final offset = _scrollController.offset;
+    if (!_headerCollapsed && offset > 48) {
+      setState(() => _headerCollapsed = true);
+    } else if (_headerCollapsed && offset < 14) {
+      setState(() => _headerCollapsed = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
     final deletedShows = ref
@@ -33,15 +62,18 @@ class RecycleBinScreen extends ConsumerWidget {
         children: [
           IosLargeTitleHeader(
             title: 'Recycle Bin',
-            collapsed: true,
+            collapsed: deletedShows.isEmpty ? true : _headerCollapsed,
             leadingActions: IosCircleIconButton(
               icon: MoglogIcons.chevronLeft,
-              onTap: onBack,
+              tooltip: 'Back',
+              onTap: widget.onBack,
             ),
             trailingActions: deletedShows.isNotEmpty
                 ? [
                     if (deletedShows.length > 1)
-                      IosPressable(
+                      IosTertiaryButton(
+                        text: 'Restore All',
+                        size: MoglogButtonSize.small,
                         onTap: () async {
                           final ctrl = ref.read(dramaControllerProvider);
                           await ctrl.restoreDramasBatch(deletedShows);
@@ -49,22 +81,11 @@ class RecycleBinScreen extends ConsumerWidget {
                                 'Restored ${deletedShows.length} shows to library',
                               );
                         },
-                        hapticOnTap: true,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 4,
-                          ),
-                          child: Text(
-                            'Restore All',
-                            style: t.callout.copyWith(
-                              color: c.accent,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
                       ),
-                    IosPressable(
+                    IosTertiaryButton(
+                      text: 'Empty',
+                      size: MoglogButtonSize.small,
+                      textColor: c.destructive,
                       onTap: () {
                         showIosActionSheet(
                           context: context,
@@ -87,20 +108,6 @@ class RecycleBinScreen extends ConsumerWidget {
                           ],
                         );
                       },
-                      hapticOnTap: true,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 4,
-                        ),
-                        child: Text(
-                          'Empty',
-                          style: t.callout.copyWith(
-                            color: c.destructive,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
                     ),
                   ]
                 : null,
@@ -116,7 +123,13 @@ class RecycleBinScreen extends ConsumerWidget {
                     ),
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(
+                      MoglogSpacing.md,
+                      MoglogSpacing.sm,
+                      MoglogSpacing.md,
+                      48,
+                    ),
                     itemCount: deletedShows.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (_, idx) {
@@ -162,9 +175,9 @@ class RecycleBinScreen extends ConsumerWidget {
                           }
                         },
                         background: Container(
-                          decoration: BoxDecoration(
+                          decoration: ShapeDecoration(
                             color: c.accent,
-                            borderRadius: MoglogShapes.card,
+                            shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
                           ),
                           padding: const EdgeInsets.only(left: 18),
                           alignment: Alignment.centerLeft,
@@ -183,9 +196,9 @@ class RecycleBinScreen extends ConsumerWidget {
                           ),
                         ),
                         secondaryBackground: Container(
-                          decoration: BoxDecoration(
+                          decoration: ShapeDecoration(
                             color: c.destructive,
-                            borderRadius: MoglogShapes.card,
+                            shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
                           ),
                           padding: const EdgeInsets.only(right: 18),
                           alignment: Alignment.centerRight,
@@ -195,28 +208,25 @@ class RecycleBinScreen extends ConsumerWidget {
                               Text(
                                 'Delete Forever',
                                 style: t.subhead.copyWith(
-                                  color: Colors.white,
+                                  color: c.onDestructive,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              const Icon(MoglogIcons.trash, color: Colors.white),
+                              Icon(MoglogIcons.trash, color: c.onDestructive),
                             ],
                           ),
                         ),
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: ShapeDecoration(
-                            color: c.secondaryBackground,
-                            shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-                          ),
+                        child: IosCard(
+                          padding: const EdgeInsets.all(11),
                           child: Row(
                             children: [
                               PosterImage(
                                 url: drama.posterPath,
-                                width: 44,
-                                height: 64,
-                                borderRadius: BorderRadius.circular(8),
+                                width: 46,
+                                height: 66,
+                                borderRadius:
+                                    const BorderRadius.all(Radius.circular(9)),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -225,11 +235,11 @@ class RecycleBinScreen extends ConsumerWidget {
                                   children: [
                                     Text(
                                       drama.title,
-                                      maxLines: 1,
+                                      maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: t.headline.copyWith(
+                                      style: t.callout.copyWith(
                                         color: c.label,
-                                        fontSize: 15.5,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                     const SizedBox(height: 3),
@@ -244,10 +254,10 @@ class RecycleBinScreen extends ConsumerWidget {
                               ),
                               IosCircleIconButton(
                                 icon: MoglogIcons.rotateCcw,
-                                size: 32,
-                                iconSize: 15,
-                                tint: c.accent,
-                                tooltip: 'Restore',
+                                size: 34,
+                                iconSize: 16,
+                                tint: c.accentText,
+                                tooltip: 'Restore ${drama.title}',
                                 onTap: () async {
                                   await ref
                                       .read(dramaControllerProvider)
@@ -257,13 +267,13 @@ class RecycleBinScreen extends ConsumerWidget {
                                       .show('Restored "${drama.title}"');
                                 },
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 2),
                               IosCircleIconButton(
                                 icon: MoglogIcons.trash,
-                                size: 32,
-                                iconSize: 15,
+                                size: 34,
+                                iconSize: 16,
                                 tint: c.destructive,
-                                tooltip: 'Delete Permanently',
+                                tooltip: 'Delete ${drama.title} permanently',
                                 onTap: () {
                                   showIosActionSheet(
                                     context: context,

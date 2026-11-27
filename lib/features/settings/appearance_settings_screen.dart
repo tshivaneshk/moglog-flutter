@@ -5,15 +5,47 @@ import '../../app/providers.dart';
 import '../../core/design_system/components.dart';
 import '../../core/design_system/icons.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/design_system/tokens.dart';
 import '../../domain/model/app_settings.dart';
 
-class AppearanceSettingsScreen extends ConsumerWidget {
+class AppearanceSettingsScreen extends ConsumerStatefulWidget {
   final VoidCallback onBack;
 
   const AppearanceSettingsScreen({super.key, required this.onBack});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppearanceSettingsScreen> createState() =>
+      _AppearanceSettingsScreenState();
+}
+
+class _AppearanceSettingsScreenState
+    extends ConsumerState<AppearanceSettingsScreen> {
+  final ScrollController _scrollController = ScrollController();
+  bool _headerCollapsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final offset = _scrollController.offset;
+    if (!_headerCollapsed && offset > 48) {
+      setState(() => _headerCollapsed = true);
+    } else if (_headerCollapsed && offset < 14) {
+      setState(() => _headerCollapsed = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
     final settings = ref.watch(currentSettingsProvider);
@@ -32,15 +64,22 @@ class AppearanceSettingsScreen extends ConsumerWidget {
         children: [
           IosLargeTitleHeader(
             title: 'Appearance',
-            collapsed: true,
+            collapsed: _headerCollapsed,
             leadingActions: IosCircleIconButton(
               icon: MoglogIcons.chevronLeft,
-              onTap: onBack,
+              tooltip: 'Back',
+              onTap: widget.onBack,
             ),
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(
+                MoglogSpacing.md,
+                MoglogSpacing.sm,
+                MoglogSpacing.md,
+                56,
+              ),
               children: [
                 IosGroupedSection(
                   header: 'Theme',
@@ -74,7 +113,9 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                       child: IosSegmentedControl(
                         labels: const ['Poster Grid', 'Compact List'],
                         selectedIndex:
-                            settings.layoutMode == LibraryLayoutMode.grid ? 0 : 1,
+                            settings.layoutMode == LibraryLayoutMode.grid
+                                ? 0
+                                : 1,
                         onSelected: (i) => store.setLayoutMode(
                           i == 0
                               ? LibraryLayoutMode.grid
@@ -90,8 +131,10 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                       showDivider: true,
                       trailing: Text(
                         '${settings.gridColumns} Columns',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: t.subhead.copyWith(
-                          color: c.accent,
+                          color: c.accentText,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

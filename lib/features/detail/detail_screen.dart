@@ -14,13 +14,29 @@ import '../../core/design_system/icons.dart';
 import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/design_system/tokens.dart';
 import '../../core/network/image_cache_manager.dart';
 import '../../domain/logic/season_progress.dart';
 import '../../domain/model/drama.dart';
 import '../../domain/model/drama_extra_details.dart';
+import '../../domain/model/show_comment.dart';
 import 'widgets/progress_stepper_card.dart';
 import 'widgets/rating_and_notes_card.dart';
 import 'widgets/watch_providers_section.dart';
+
+Color _contrastInkForAccent(Color accent, MoglogColors c) {
+  final est = ThemeData.estimateBrightnessForColor(accent);
+  return est == Brightness.dark ? c.onMedia : MoglogColors.light.onAccent;
+}
+
+Color _readableTextAccent(Color accent, MoglogColors c) {
+  if (c.isDark) return accent;
+  final hsl = HSLColor.fromColor(accent);
+  if (hsl.lightness > 0.36) {
+    return hsl.withLightness(0.32).toColor();
+  }
+  return accent;
+}
 
 class DetailScreen extends ConsumerStatefulWidget {
   final int dramaId;
@@ -40,9 +56,11 @@ class DetailScreen extends ConsumerStatefulWidget {
 
 class _DetailScreenState extends ConsumerState<DetailScreen> {
   final ScrollController _scrollController = ScrollController();
+  final ValueNotifier<bool> _pinnedBarCollapsed = ValueNotifier<bool>(false);
 
   Drama? _drama;
   DramaExtraDetails? _extra;
+  List<ShowComment> _communityComments = const [];
   bool _loading = true;
   bool _isSaved = false;
   bool _synopsisExpanded = false;
@@ -55,8 +73,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     final ctrl = ref.read(dramaControllerProvider);
-    final local = ref.read(dramaRepositoryProvider).getLocalDramaById(widget.dramaId);
+    final local =
+        ref.read(dramaRepositoryProvider).getLocalDramaById(widget.dramaId);
     final immediate = local ?? ctrl.getImmediateDramaById(widget.dramaId);
     final immediateExtra = ctrl.getImmediateExtraDetails(widget.dramaId);
     if (immediateExtra != null) {
@@ -76,6 +96,25 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
       }
     }
     _loadData();
+    _loadCommunityComments();
+  }
+
+  Future<void> _loadCommunityComments() async {
+    final comments = await ref
+        .read(showReviewsRepositoryProvider)
+        .fetchComments(widget.dramaId);
+    if (!mounted) return;
+    setState(() => _communityComments = comments);
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final offset = _scrollController.offset;
+    if (!_pinnedBarCollapsed.value && offset > 220) {
+      _pinnedBarCollapsed.value = true;
+    } else if (_pinnedBarCollapsed.value && offset < 170) {
+      _pinnedBarCollapsed.value = false;
+    }
   }
 
   void _prewarmDetailMedia(DramaExtraDetails extra) {
@@ -109,9 +148,9 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 
   Future<void> _loadData() async {
     final ctrl = ref.read(dramaControllerProvider);
-    final local = ref.read(dramaRepositoryProvider).getLocalDramaById(widget.dramaId);
+    final local =
+        ref.read(dramaRepositoryProvider).getLocalDramaById(widget.dramaId);
 
-    // If both drama summary and extra details are already hydrated from local cache, skip redundant fetch.
     if (_drama != null &&
         _extra != null &&
         _drama!.overview.isNotEmpty &&
@@ -148,10 +187,12 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
           genres: _drama!.genres.isNotEmpty
               ? _drama!.genres
               : extra.genres.join(', '),
-          releaseYear:
-              _drama!.releaseYear > 0 ? _drama!.releaseYear : extra.releaseYear,
-          totalSeasons:
-              _drama!.totalSeasons > 0 ? _drama!.totalSeasons : extra.totalSeasons,
+          releaseYear: _drama!.releaseYear > 0
+              ? _drama!.releaseYear
+              : extra.releaseYear,
+          totalSeasons: _drama!.totalSeasons > 0
+              ? _drama!.totalSeasons
+              : extra.totalSeasons,
           totalEpisodes: _drama!.totalEpisodes > 0
               ? _drama!.totalEpisodes
               : extra.totalEpisodes,
@@ -175,7 +216,6 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     }
   }
 
-  /// Fast native image-codec tint extraction using w185 thumbnail via pooled cache.
   Future<void> _extractPosterAccent(String posterUrl) async {
     final trimmed = posterUrl.trim();
     if (trimmed.isEmpty) return;
@@ -220,7 +260,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
       );
       if (image == null) return;
 
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final byteData =
+          await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       image.dispose();
       if (byteData == null) return;
 
@@ -233,12 +274,14 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
       for (var i = 0; i + 3 < pixels.length; i += 4) {
         final a = pixels[i + 3];
         if (a < 128) continue;
-        final color = Color.fromARGB(255, pixels[i], pixels[i + 1], pixels[i + 2]);
+        final color =
+            Color.fromARGB(255, pixels[i], pixels[i + 1], pixels[i + 2]);
         final hsl = HSLColor.fromColor(color);
         if (hsl.lightness >= 0.16 &&
             hsl.lightness <= 0.84 &&
             hsl.saturation >= 0.14) {
-          final fbScore = hsl.saturation * (1.0 - (hsl.lightness - 0.5).abs() * 0.7);
+          final fbScore =
+              hsl.saturation * (1.0 - (hsl.lightness - 0.5).abs() * 0.7);
           if (fbScore > bestFallbackScore) {
             bestFallbackScore = fbScore;
             bestFallback = hsl;
@@ -322,12 +365,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     var nextStatus = d.status;
     final prevEps = d.episodesWatched;
 
-    // Auto-promote Planned -> Watching on first watched episode
     if (prevEps == 0 && newEps > 0 && nextStatus == 'Planned') {
       nextStatus = 'Watching';
     }
 
-    // Auto-advance season if user finished current non-final season
     if (resolvedSeasons.length > 1 && newEps > prevEps) {
       var cumulative = 0;
       for (final s in resolvedSeasons) {
@@ -409,7 +450,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   void _showMoreSheet() {
     final d = _drama;
     if (d == null) return;
-    final hiddenIds = ref.read(currentSettingsProvider).hiddenFromCircleDramaIds;
+    final hiddenIds =
+        ref.read(currentSettingsProvider).hiddenFromCircleDramaIds;
     final isHidden = hiddenIds.contains(d.id);
 
     showIosActionSheet(
@@ -455,10 +497,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                   .read(dramaControllerProvider)
                   .setDramaHiddenFromCircle(d.id, !isHidden);
               ref.read(toastProvider.notifier).show(
-                !isHidden
-                    ? 'Hidden "${d.title}" from Watch Circle'
-                    : 'Visible in Watch Circle again',
-              );
+                    !isHidden
+                        ? 'Hidden "${d.title}" from Watch Circle'
+                        : 'Visible in Watch Circle again',
+                  );
             },
           ),
         if (_isSaved)
@@ -469,10 +511,11 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
             onTap: () async {
               await ref.read(dramaControllerProvider).moveToRecycleBin(d);
               ref.read(toastProvider.notifier).show(
-                'Moved "${d.title}" to Recycle Bin',
-                actionLabel: 'Undo',
-                onAction: () => ref.read(dramaControllerProvider).restoreDrama(d),
-              );
+                    'Moved "${d.title}" to Recycle Bin',
+                    actionLabel: 'Undo',
+                    onAction: () =>
+                        ref.read(dramaControllerProvider).restoreDrama(d),
+                  );
               widget.onBack();
             },
           ),
@@ -490,6 +533,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     } else {
       _autosaveDebounce?.cancel();
     }
+    _pinnedBarCollapsed.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -498,16 +542,18 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
+    final reduceMotion = context.reduceMotion;
     final settings = ref.watch(currentSettingsProvider);
-    final accent =
-        (settings.dynamicPosterTint && _dynamicAccent != null)
-            ? _dynamicAccent!
-            : c.accent;
+    final authState = ref.watch(authControllerProvider);
+    final accent = (settings.dynamicPosterTint && _dynamicAccent != null)
+        ? _dynamicAccent!
+        : c.accent;
+    final accentInk = _readableTextAccent(accent, c);
 
     if (_loading) {
       return Scaffold(
         backgroundColor: c.background,
-        body: Center(child: CircularProgressIndicator(color: c.accent)),
+        body: _DetailLoadingSkeleton(onBack: widget.onBack),
       );
     }
 
@@ -522,6 +568,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               collapsed: true,
               leadingActions: IosCircleIconButton(
                 icon: MoglogIcons.chevronLeft,
+                tooltip: 'Back',
                 onTap: widget.onBack,
               ),
             ),
@@ -540,7 +587,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     }
 
     final isTopFour = settings.topFourFavoriteIds.contains(drama.id);
-    final isHiddenFromCircle = settings.hiddenFromCircleDramaIds.contains(drama.id);
+    final isHiddenFromCircle =
+        settings.hiddenFromCircleDramaIds.contains(drama.id);
     final matchingShelves = drama.tagList
         .where(
           (tag) => settings.customCollections
@@ -551,7 +599,12 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final headerHeight = (screenHeight * 0.48).clamp(190.0, 440.0);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final headerHeight = (screenHeight * 0.48).clamp(200.0, 440.0);
+    final castRailHeight =
+        130.0 + ((textScale - 1.0).clamp(0.0, 1.0) * 56.0);
+    final similarRailHeight =
+        200.0 + ((textScale - 1.0).clamp(0.0, 1.0) * 32.0);
 
     final statusLabels = drama.totalSeasons > 1
         ? _statuses.map((s) => 'S${drama.currentSeason} $s').toList()
@@ -566,28 +619,29 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final detailBody = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Status badges (In Library / Hidden from Circle)
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            if (_isSaved)
-              _PillBadge(
-                label: 'In Library',
-                icon: MoglogIcons.check,
-                color: accent,
-              ),
-            if (isHiddenFromCircle)
-              _PillBadge(
-                label: 'Hidden from Circle',
-                icon: MoglogIcons.eyeOff,
-                color: c.secondaryLabel,
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Title & metadata
+        if (_isSaved || isHiddenFromCircle) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              if (_isSaved)
+                _PillBadge(
+                  label: 'In Library',
+                  icon: MoglogIcons.check,
+                  color: accent,
+                  textColor: accentInk,
+                ),
+              if (isHiddenFromCircle)
+                _PillBadge(
+                  label: 'Hidden from Circle',
+                  icon: MoglogIcons.eyeOff,
+                  color: c.secondaryLabel,
+                  textColor: c.secondaryLabel,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
         Text(drama.title, style: t.title1.copyWith(color: c.label)),
         const SizedBox(height: 6),
         Wrap(
@@ -627,7 +681,6 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               ),
           ],
         ),
-
         if (drama.genreList.isNotEmpty) ...[
           const SizedBox(height: 10),
           Wrap(
@@ -637,13 +690,16 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                 .map(
                   (g) => Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 4,
+                      horizontal: 10,
+                      vertical: 5,
                     ),
                     decoration: BoxDecoration(
                       color: c.secondaryBackground,
                       borderRadius: MoglogShapes.pill,
-                      border: Border.all(color: c.separator, width: 0.6),
+                      border: Border.all(
+                        color: c.cardBorder,
+                        width: c.hairlineWidth,
+                      ),
                     ),
                     child: Text(
                       g,
@@ -654,15 +710,15 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                 .toList(),
           ),
         ],
-
-        // Quick action pills (Pin to Top 4 + Add to Shelf)
         if (_isSaved) ...[
           const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: _QuickActionPill(
-                  icon: isTopFour ? MoglogIcons.starFilled : MoglogIcons.starOutline,
+                  icon: isTopFour
+                      ? MoglogIcons.starFilled
+                      : MoglogIcons.starOutline,
                   label: isTopFour ? 'Pinned in Top 4' : 'Pin to Top 4',
                   active: isTopFour,
                   activeColor: c.starGold,
@@ -671,10 +727,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                         .read(dramaControllerProvider)
                         .toggleTopFourFavorite(drama.id);
                     ref.read(toastProvider.notifier).show(
-                      added
-                          ? 'Pinned "${drama.title}" to Top 4 Favorites'
-                          : 'Removed from Top 4 Favorites',
-                    );
+                          added
+                              ? 'Pinned "${drama.title}" to Top 4 Favorites'
+                              : 'Removed from Top 4 Favorites',
+                        );
                   },
                 ),
               ),
@@ -688,17 +744,14 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                       ? 'Shelves ($matchingShelves)'
                       : 'Add to Shelf',
                   active: matchingShelves > 0,
-                  activeColor: accent,
+                  activeColor: accentInk,
                   onTap: _showAssignShelfSheet,
                 ),
               ),
             ],
           ),
         ],
-
         const SizedBox(height: 16),
-
-        // Status Segmented Control (matching Kotlin IosSegmentedControl)
         IosSegmentedControl(
           labels: statusLabels,
           selectedIndex: _statuses.indexOf(drama.status).clamp(0, 2),
@@ -722,10 +775,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
             }
           },
         ),
-
         const SizedBox(height: 16),
-
-        // Multi-Season Progress Stepper Card
         ProgressStepperCard(
           episodesWatched: drama.episodesWatched,
           totalEpisodes: drama.totalEpisodes,
@@ -742,8 +792,6 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
           ),
           onEpisodesWatchedChange: _handleEpisodesChanged,
         ),
-
-        // Binge & Catch-Up Calculator Card (hidden once completed)
         if (drama.status != 'Done' &&
             drama.totalEpisodes > 0 &&
             bingeEstimate.remainingEpisodes > 0) ...[
@@ -751,20 +799,11 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
           _BingeCalculatorCard(
             estimate: bingeEstimate,
             runtimeMinutes: _extra?.episodeRuntime ?? 45,
-            accentColor: accent,
+            accentColor: accentInk,
           ),
         ],
-
         const SizedBox(height: 16),
-
-        // Synopsis / Overview + Watch Trailer + Search Web
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: ShapeDecoration(
-            color: c.secondaryBackground,
-            shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-          ),
+        IosCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -778,18 +817,23 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                 overflow: _synopsisExpanded
                     ? TextOverflow.visible
                     : TextOverflow.ellipsis,
-                style: t.subhead.copyWith(color: c.secondaryLabel, height: 1.45),
+                style:
+                    t.subhead.copyWith(color: c.secondaryLabel, height: 1.48),
               ),
               if (drama.overview.length > 180) ...[
                 const SizedBox(height: 6),
-                GestureDetector(
+                IosPressable(
                   onTap: () =>
                       setState(() => _synopsisExpanded = !_synopsisExpanded),
-                  child: Text(
-                    _synopsisExpanded ? 'less' : 'more',
-                    style: t.footnote.copyWith(
-                      color: accent,
-                      fontWeight: FontWeight.w600,
+                  hapticOnTap: true,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      _synopsisExpanded ? 'Show less' : 'Read more',
+                      style: t.footnote.copyWith(
+                        color: accentInk,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -804,7 +848,9 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                       child: IosPrimaryButton(
                         text: 'Watch Trailer',
                         leadingIcon: MoglogIcons.play,
+                        size: MoglogButtonSize.medium,
                         backgroundColor: accent,
+                        foregroundColor: _contrastInkForAccent(accent, c),
                         onTap: () => launchUrl(
                           Uri.https(
                             'www.youtube.com',
@@ -821,8 +867,11 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                     child: IosSecondaryButton(
                       text: 'Search Web',
                       leadingIcon: MoglogIcons.externalLink,
+                      size: MoglogButtonSize.medium,
                       onTap: () {
-                        final q = Uri.encodeComponent('${drama.title} tv series');
+                        final q = Uri.encodeComponent(
+                          '${drama.title} tv series',
+                        );
                         launchUrl(
                           Uri.parse('https://www.google.com/search?q=$q'),
                           mode: LaunchMode.externalApplication,
@@ -835,38 +884,81 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
             ],
           ),
         ),
-
         const SizedBox(height: 16),
-
-        // Personal Rating & Audience / Google Reviews
         RatingAndNotesCard(
           dramaId: drama.id,
           dramaTitle: drama.title,
           myRating: drama.myRating,
           reviews: _extra?.reviews ?? const [],
+          communityComments: _communityComments,
+          currentUserUid: authState.user?.uid,
+          isSignedIn: authState.user != null,
           accentColor: accent,
           onRatingChanged: (r) =>
               _updateDrama(drama.copyWith(myRating: r), immediateSave: true),
+          onSubmitComment: (content, rating) async {
+            final existing = _communityComments
+                .where((c) => c.uid == authState.user?.uid)
+                .firstOrNull;
+            final posted = await ref
+                .read(showReviewsRepositoryProvider)
+                .postOrUpdateComment(
+                  dramaId: drama.id,
+                  content: content,
+                  rating: rating,
+                  existingCreatedAt: existing?.createdAt,
+                );
+            if (!mounted) return;
+            setState(() {
+              _communityComments = [
+                posted,
+                ..._communityComments.where((c) => c.uid != posted.uid),
+              ];
+            });
+            ref.read(toastProvider.notifier).show(
+                  existing != null ? 'Review updated' : 'Review posted',
+                );
+          },
+          onDeleteComment: () async {
+            final uid = authState.user?.uid;
+            await ref
+                .read(showReviewsRepositoryProvider)
+                .deleteComment(drama.id);
+            if (!mounted) return;
+            setState(() {
+              _communityComments =
+                  _communityComments.where((c) => c.uid != uid).toList();
+            });
+            ref.read(toastProvider.notifier).show('Review deleted');
+          },
+          onRequestSignIn: () async {
+            final err = await ref
+                .read(authControllerProvider.notifier)
+                .signInWithGoogle();
+            if (err != null && mounted) {
+              ref.read(toastProvider.notifier).show(err);
+            }
+          },
+          onNotify: (msg) => ref.read(toastProvider.notifier).show(msg),
         ),
-
-        // Regional Watch Providers ("Where to Watch")
         if ((_extra?.watchProviders ?? const []).isNotEmpty) ...[
           const SizedBox(height: 16),
           WatchProvidersSection(
             dramaId: drama.id,
             dramaTitle: drama.title,
             watchProviders: _extra?.watchProviders ?? const [],
-            accentColor: accent,
+            accentColor: accentInk,
           ),
         ],
-
-        // Cast Horizontal Rail
         if ((_extra?.cast ?? const []).isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Text('Cast', style: t.title3.copyWith(color: c.label)),
+          const SizedBox(height: 22),
+          const IosSectionHeader(
+            title: 'Cast',
+            padding: EdgeInsets.zero,
+          ),
           const SizedBox(height: 10),
           SizedBox(
-            height: 126,
+            height: castRailHeight,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _extra!.cast.length,
@@ -874,8 +966,9 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               itemBuilder: (_, idx) {
                 final member = _extra!.cast[idx];
                 return SizedBox(
-                  width: 78,
+                  width: 82,
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       PosterImage(
                         url: member.profilePath ?? '',
@@ -900,10 +993,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                        style: t.caption2.copyWith(
-                          color: c.secondaryLabel,
-                          fontSize: 10,
-                        ),
+                        style: t.microBadge.copyWith(color: c.secondaryLabel),
                       ),
                     ],
                   ),
@@ -912,34 +1002,37 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
             ),
           ),
         ],
-
-        // Similar / Recommended Shows Rail
         if ((_extra?.recommendations ?? const []).isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Text('Similar Shows', style: t.title3.copyWith(color: c.label)),
+          const SizedBox(height: 22),
+          const IosSectionHeader(
+            title: 'Similar Shows',
+            padding: EdgeInsets.zero,
+          ),
           const SizedBox(height: 10),
           SizedBox(
-            height: 196,
+            height: similarRailHeight,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _extra!.recommendations.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 11),
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
               itemBuilder: (_, idx) {
                 final rec = _extra!.recommendations[idx];
                 return IosPressable(
+                  semanticLabel: rec.title,
+                  focusRadius: MoglogShapes.posterRadius,
                   onTap: () {
                     ref.read(dramaControllerProvider).cacheTransientDrama(rec);
                     widget.onOpenRecommendation(rec.id);
                   },
                   child: SizedBox(
-                    width: 108,
+                    width: 112,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: PosterImage(
                             url: rec.posterPath,
-                            width: 108,
+                            width: 112,
                             borderRadius: MoglogShapes.poster,
                           ),
                         ),
@@ -961,8 +1054,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
             ),
           ),
         ],
-
-        SizedBox(height: _isSaved ? 48 : 132),
+        SizedBox(height: _isSaved ? 56 : 138),
       ],
     );
 
@@ -971,10 +1063,12 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
       body: Stack(
         children: [
           if (isLandscape)
-            // Adaptive Landscape 2-Pane Split matching Kotlin DetailScreen (34% poster / 66% details)
             SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: MoglogSpacing.md,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     SizedBox(
@@ -990,9 +1084,9 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                                   borderRadius: MoglogShapes.card,
                                 ),
                                 Positioned(
-                                  top: 10,
-                                  left: 10,
-                                  right: 10,
+                                  top: 8,
+                                  left: 8,
+                                  right: 8,
                                   child: Row(
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
@@ -1000,17 +1094,15 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                                       IosCircleIconButton(
                                         icon: MoglogIcons.chevronLeft,
                                         tooltip: 'Back',
-                                        backgroundColor:
-                                            Colors.black.withValues(alpha: 0.55),
-                                        tint: Colors.white,
+                                        backgroundColor: c.mediaScrim,
+                                        tint: c.onMedia,
                                         onTap: widget.onBack,
                                       ),
                                       IosCircleIconButton(
                                         icon: MoglogIcons.moreHorizontal,
                                         tooltip: 'More actions',
-                                        backgroundColor:
-                                            Colors.black.withValues(alpha: 0.55),
-                                        tint: Colors.white,
+                                        backgroundColor: c.mediaScrim,
+                                        tint: c.onMedia,
                                         onTap: _showMoreSheet,
                                       ),
                                     ],
@@ -1025,6 +1117,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                               text: 'Add to Library',
                               leadingIcon: MoglogIcons.plus,
                               backgroundColor: accent,
+                              foregroundColor: _contrastInkForAccent(accent, c),
                               onTap: _addToLibrary,
                             ),
                           ],
@@ -1034,7 +1127,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                     const SizedBox(width: 20),
                     Expanded(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.only(bottom: 24),
+                        padding: const EdgeInsets.only(bottom: 28),
                         child: detailBody,
                       ),
                     ),
@@ -1043,7 +1136,6 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               ),
             )
           else ...[
-            // Portrait full-bleed parallax poster header (120Hz AnimatedBuilder scoped to header)
             SingleChildScrollView(
               controller: _scrollController,
               child: Column(
@@ -1063,7 +1155,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                                   ? _scrollController.offset
                                   : 0.0;
                               return Transform.translate(
-                                offset: Offset(0, -offset * 0.35),
+                                offset: Offset(
+                                  0,
+                                  reduceMotion ? 0 : -offset * 0.35,
+                                ),
                                 child: child,
                               );
                             },
@@ -1074,31 +1169,35 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                           ),
                         ),
                         AnimatedContainer(
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOutCubic,
+                          duration:
+                              reduceMotion ? Duration.zero : MoglogMotion.fast,
+                          curve: MoglogMotion.curve,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                (settings.dynamicPosterTint && _dynamicAccent != null)
+                                (settings.dynamicPosterTint &&
+                                        _dynamicAccent != null)
                                     ? Color.alphaBlend(
                                         accent.withValues(alpha: 0.24),
-                                        Colors.black.withValues(alpha: 0.42),
+                                        c.mediaScrimLight,
                                       )
-                                    : Colors.black.withValues(alpha: 0.45),
-                                (settings.dynamicPosterTint && _dynamicAccent != null)
+                                    : c.mediaScrimLight,
+                                (settings.dynamicPosterTint &&
+                                        _dynamicAccent != null)
                                     ? accent.withValues(alpha: 0.08)
-                                    : Colors.transparent,
-                                (settings.dynamicPosterTint && _dynamicAccent != null)
+                                    : c.background.withValues(alpha: 0.0),
+                                (settings.dynamicPosterTint &&
+                                        _dynamicAccent != null)
                                     ? Color.alphaBlend(
                                         accent.withValues(alpha: 0.14),
-                                        c.background.withValues(alpha: 0.86),
+                                        c.background.withValues(alpha: 0.88),
                                       )
-                                    : c.background.withValues(alpha: 0.82),
+                                    : c.background.withValues(alpha: 0.84),
                                 c.background,
                               ],
-                              stops: const [0.0, 0.35, 0.78, 1.0],
+                              stops: const [0.0, 0.36, 0.78, 1.0],
                             ),
                           ),
                         ),
@@ -1106,46 +1205,99 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: MoglogSpacing.screenHorizontal,
                     child: detailBody,
                   ),
                 ],
               ),
             ),
 
-            // Floating top navigation bar (Back + More)
+            // Collapsing inline top bar + floating Back & More controls
             Positioned(
               top: 0,
               left: 0,
               right: 0,
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IosCircleIconButton(
-                        icon: MoglogIcons.chevronLeft,
-                        tooltip: 'Back',
-                        backgroundColor: Colors.black.withValues(alpha: 0.55),
-                        tint: Colors.white,
-                        onTap: widget.onBack,
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _pinnedBarCollapsed,
+                builder: (context, collapsedBar, _) {
+                  return AnimatedContainer(
+                    duration: reduceMotion ? Duration.zero : MoglogMotion.fast,
+                    curve: MoglogMotion.curve,
+                    decoration: BoxDecoration(
+                      color: collapsedBar
+                          ? c.frostedBarSurface
+                          : c.frostedBarSurface.withValues(alpha: 0.0),
+                      border: Border(
+                        bottom: collapsedBar
+                            ? BorderSide(
+                                color: c.glassBorder,
+                                width: c.hairlineWidth,
+                              )
+                            : BorderSide.none,
                       ),
-                      IosCircleIconButton(
-                        icon: MoglogIcons.moreHorizontal,
-                        tooltip: 'More actions',
-                        backgroundColor: Colors.black.withValues(alpha: 0.55),
-                        tint: Colors.white,
-                        onTap: _showMoreSheet,
+                    ),
+                    child: SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: IosCircleIconButton(
+                                icon: MoglogIcons.chevronLeft,
+                                tooltip: 'Back',
+                                backgroundColor:
+                                    collapsedBar ? null : c.mediaScrim,
+                                tint: collapsedBar ? c.label : c.onMedia,
+                                onTap: widget.onBack,
+                              ),
+                            ),
+                            AnimatedOpacity(
+                              opacity: collapsedBar ? 1.0 : 0.0,
+                              duration: reduceMotion
+                                  ? Duration.zero
+                                  : MoglogMotion.fast,
+                              child: IgnorePointer(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 56,
+                                  ),
+                                  child: Text(
+                                    drama.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: t.headline.copyWith(color: c.label),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: IosCircleIconButton(
+                                icon: MoglogIcons.moreHorizontal,
+                                tooltip: 'More actions',
+                                backgroundColor:
+                                    collapsedBar ? null : c.mediaScrim,
+                                tint: collapsedBar ? c.label : c.onMedia,
+                                onTap: _showMoreSheet,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
 
-            // Sticky bottom Add to Library bar for unsaved shows
+            // Sticky bottom frosted bar for unsaved shows
             if (!_isSaved)
               Positioned(
                 left: 0,
@@ -1161,6 +1313,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                         text: 'Add to Library',
                         leadingIcon: MoglogIcons.plus,
                         backgroundColor: accent,
+                        foregroundColor: _contrastInkForAccent(accent, c),
                         onTap: _addToLibrary,
                       ),
                     ),
@@ -1174,22 +1327,93 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   }
 }
 
+class _DetailLoadingSkeleton extends StatelessWidget {
+  final VoidCallback onBack;
+
+  const _DetailLoadingSkeleton({required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    final screenH = MediaQuery.sizeOf(context).height;
+    final headerH = (screenH * 0.44).clamp(200.0, 380.0);
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ShimmerBox(
+                width: double.infinity,
+                height: headerH,
+                borderRadius: BorderRadius.zero,
+              ),
+              const Padding(
+                padding: EdgeInsets.all(MoglogSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ShimmerBox(width: 220, height: 32),
+                    SizedBox(height: 10),
+                    ShimmerBox(width: 160, height: 18),
+                    SizedBox(height: 18),
+                    ShimmerBox(
+                      width: double.infinity,
+                      height: 44,
+                      borderRadius: MoglogShapes.control,
+                    ),
+                    SizedBox(height: 16),
+                    ShimmerBox(
+                      width: double.infinity,
+                      height: 132,
+                      borderRadius: MoglogShapes.card,
+                    ),
+                    SizedBox(height: 16),
+                    ShimmerBox(
+                      width: double.infinity,
+                      height: 160,
+                      borderRadius: MoglogShapes.card,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: IosCircleIconButton(
+              icon: MoglogIcons.chevronLeft,
+              tooltip: 'Back',
+              onTap: onBack,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _PillBadge extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
+  final Color textColor;
 
   const _PillBadge({
     required this.label,
     required this.icon,
     required this.color,
+    required this.textColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final t = context.typo;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.16),
         borderRadius: MoglogShapes.pill,
@@ -1197,11 +1421,18 @@ class _PillBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: color),
+          Icon(icon, size: 12, color: textColor),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: t.caption2.copyWith(color: color, fontWeight: FontWeight.w700),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: t.caption2.copyWith(
+                color: textColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -1231,38 +1462,47 @@ class _QuickActionPill extends StatelessWidget {
     return IosPressable(
       onTap: onTap,
       hapticOnTap: true,
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: ShapeDecoration(
-          color: active
-              ? activeColor.withValues(alpha: 0.16)
-              : c.secondaryBackground,
-          shape: MoglogShapes.smooth(
-            11,
-            side: BorderSide(
-              color: active ? activeColor.withValues(alpha: 0.55) : c.separator,
-              width: 0.8,
-            ),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 15, color: active ? activeColor : c.label),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: t.footnote.copyWith(
-                  color: active ? activeColor : c.label,
-                  fontWeight: FontWeight.w600,
-                ),
+      semanticSelected: active,
+      focusRadius: MoglogShapes.controlRadius,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 46),
+        child: DecoratedBox(
+          decoration: ShapeDecoration(
+            color: active
+                ? activeColor.withValues(alpha: 0.15)
+                : c.secondaryBackground,
+            shape: MoglogShapes.smooth(
+              MoglogShapes.controlRadius,
+              side: BorderSide(
+                color: active
+                    ? activeColor.withValues(alpha: 0.55)
+                    : c.cardBorder,
+                width: active ? 1.0 : c.hairlineWidth,
               ),
             ),
-          ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 16, color: active ? activeColor : c.label),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: t.footnote.copyWith(
+                      color: active ? activeColor : c.label,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1284,26 +1524,28 @@ class _BingeCalculatorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: ShapeDecoration(
-        color: c.secondaryBackground,
-        shape: MoglogShapes.smooth(MoglogShapes.cardRadius),
-      ),
+    return IosCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(MoglogIcons.clock, size: 16, color: accentColor),
+                  Icon(MoglogIcons.clock, size: 17, color: accentColor),
                   const SizedBox(width: 6),
-                  Text(
-                    'Binge Calculator',
-                    style: t.headline.copyWith(color: c.label),
+                  Flexible(
+                    child: Text(
+                      'Binge Calculator',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.headline.copyWith(color: c.label),
+                    ),
                   ),
                 ],
               ),
@@ -1328,20 +1570,31 @@ class _BingeCalculatorCard extends StatelessWidget {
                 if (pace != 1) const SizedBox(width: 8),
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
+                    decoration: ShapeDecoration(
                       color: c.tertiaryBackground,
-                      borderRadius: MoglogShapes.control,
+                      shape: MoglogShapes.smooth(
+                        MoglogShapes.controlRadius,
+                        side: BorderSide(
+                          color: c.glassBorder,
+                          width: c.hairlineWidth,
+                        ),
+                      ),
                     ),
                     child: Column(
                       children: [
                         Text(
                           '$pace/day',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: t.caption2.copyWith(color: c.secondaryLabel),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '${estimate.daysAtPace[pace]}d',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: t.subhead.copyWith(
                             color: c.label,
                             fontWeight: FontWeight.w700,

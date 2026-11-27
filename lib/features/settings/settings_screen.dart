@@ -7,12 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../app/ios_bottom_tab_bar.dart';
 import '../../app/providers.dart';
 import '../../core/design_system/components.dart';
 import '../../core/design_system/icons.dart';
-import '../../core/design_system/motion_haptics.dart';
-import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/design_system/tokens.dart';
 import '../../core/network/image_cache_manager.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -38,7 +38,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _headerCollapsed = false;
-  String _versionName = '3.1.2';
+  String _versionName = '3.2.0';
   String _cachedAvatarBase64 = '';
   MemoryImage? _cachedAvatarImage;
 
@@ -55,7 +55,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   void _onScroll() {
     final offset = _scrollController.offset;
-    if (!_headerCollapsed && offset > 60) {
+    if (!_headerCollapsed && offset > 56) {
       setState(() => _headerCollapsed = true);
     } else if (_headerCollapsed && offset < 16) {
       setState(() => _headerCollapsed = false);
@@ -128,29 +128,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     }
 
-    return Scaffold(
-      backgroundColor: c.background,
-      body: Column(
-        children: [
-          IosLargeTitleHeader(
-            title: 'Settings',
-            collapsed: _headerCollapsed,
-          ),
-          Expanded(
-            child: ListView(
-              controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 108),
-              children: [
-                // Top Hero Profile Card
-                IosPressable(
-                  onTap: widget.onNavigateToAccount,
-                  hapticOnTap: true,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: ShapeDecoration(
-                      color: c.secondaryBackground,
-                      shape: MoglogShapes.smooth(16),
-                    ),
+    final shellBottomPad = MoglogLayout.shellScrollBottomPadding(context);
+
+    return TabRetapListener(
+      branchIndex: 3,
+      scrollController: _scrollController,
+      child: Scaffold(
+        backgroundColor: c.background,
+        body: Column(
+          children: [
+            IosLargeTitleHeader(
+              title: 'Settings',
+              collapsed: _headerCollapsed,
+            ),
+            Expanded(
+              child: ListView(
+                controller: _scrollController,
+                padding: EdgeInsets.fromLTRB(
+                  MoglogSpacing.md,
+                  MoglogSpacing.sm,
+                  MoglogSpacing.md,
+                  shellBottomPad,
+                ),
+                children: [
+                  // Top Hero Profile Card
+                  IosCard(
+                    onTap: widget.onNavigateToAccount,
                     child: Row(
                       children: [
                         CircleAvatar(
@@ -158,8 +161,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           backgroundColor: c.tertiaryBackground,
                           backgroundImage: avatarImg,
                           child: avatarImg == null
-                              ? Icon(MoglogIcons.person,
-                                  size: 26, color: c.accent)
+                              ? Icon(
+                                  MoglogIcons.person,
+                                  size: 26,
+                                  color: c.accentText,
+                                )
                               : null,
                         ),
                         const SizedBox(width: 14),
@@ -170,7 +176,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               Text(
                                 displayName,
                                 style: t.title3.copyWith(color: c.label),
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 2),
@@ -185,6 +191,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ],
                           ),
                         ),
+                        const SizedBox(width: 8),
                         Icon(
                           MoglogIcons.chevronRight,
                           size: 18,
@@ -193,116 +200,120 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                // Connected Services
-                IosGroupedSection(
-                  header: 'Connected Services',
-                  children: [
-                    IosGroupedRow(
-                      title: 'Watch Circle & Friends',
-                      subtitle: user != null
-                          ? '${authState.circleFriends.length} connected friend${authState.circleFriends.length == 1 ? "" : "s"}'
-                          : 'Taste Blend, race & nudges',
-                      icon: MoglogIcons.users,
-                      iconBackground: c.accent,
-                      showChevron: true,
-                      showDivider: user != null,
-                      onTap: widget.onNavigateToWatchCircle,
-                    ),
-                    if (user != null)
-                      IosSwitchRow(
-                        title: 'Share My Watch Activity',
-                        subtitle: 'Visible to Watch Circle friends',
-                        icon: MoglogIcons.sparkles,
+                  // Connected Services
+                  IosGroupedSection(
+                    header: 'Connected Services',
+                    children: [
+                      IosGroupedRow(
+                        title: 'Watch Circle & Friends',
+                        subtitle: user != null
+                            ? '${authState.circleFriends.length} connected friend${authState.circleFriends.length == 1 ? "" : "s"}'
+                            : 'Taste Blend, race & nudges',
+                        icon: MoglogIcons.users,
+                        iconBackground: c.accent,
+                        showChevron: true,
+                        showDivider: user != null,
+                        onTap: widget.onNavigateToWatchCircle,
+                      ),
+                      if (user != null)
+                        IosSwitchRow(
+                          title: 'Share My Watch Activity',
+                          subtitle: 'Visible to Watch Circle friends',
+                          icon: MoglogIcons.sparkles,
+                          iconBackground: c.statusPlanned,
+                          value: settings.watchCircleSharingEnabled,
+                          showDivider: false,
+                          onChanged: (v) async {
+                            await ref
+                                .read(settingsStoreProvider)
+                                .setWatchCircleSharingEnabled(v);
+                            await ref
+                                .read(watchCircleRepositoryProvider)
+                                .publishMyActivity(
+                                  ref.read(currentDramasProvider),
+                                );
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Preferences
+                  IosGroupedSection(
+                    header: 'Preferences',
+                    children: [
+                      IosGroupedRow(
+                        title: 'Appearance',
+                        subtitle: 'Theme, poster tint & layout',
+                        icon: MoglogIcons.sunMoon,
+                        iconBackground: c.statusWatching,
+                        showChevron: true,
+                        onTap: widget.onNavigateToAppearance,
+                      ),
+                      IosGroupedRow(
+                        title: 'Advanced & Storage',
+                        subtitle: 'App lock, backups, bin & TMDB key',
+                        icon: MoglogIcons.shield,
                         iconBackground: c.statusPlanned,
-                        value: settings.watchCircleSharingEnabled,
+                        showChevron: true,
                         showDivider: false,
-                        onChanged: (v) async {
-                          await ref
-                              .read(settingsStoreProvider)
-                              .setWatchCircleSharingEnabled(v);
-                          await ref
-                              .read(watchCircleRepositoryProvider)
-                              .publishMyActivity(ref.read(currentDramasProvider));
-                        },
+                        onTap: widget.onNavigateToAdvanced,
                       ),
-                  ],
-                ),
-                const SizedBox(height: 20),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
 
-                // Preferences
-                IosGroupedSection(
-                  header: 'Preferences',
-                  children: [
-                    IosGroupedRow(
-                      title: 'Appearance',
-                      subtitle: 'Theme, poster tint & layout',
-                      icon: MoglogIcons.sunMoon,
-                      iconBackground: c.statusWatching,
-                      showChevron: true,
-                      onTap: widget.onNavigateToAppearance,
-                    ),
-                    IosGroupedRow(
-                      title: 'Advanced & Storage',
-                      subtitle: 'App lock, backups, bin & TMDB key',
-                      icon: MoglogIcons.shield,
-                      iconBackground: c.statusPlanned,
-                      showChevron: true,
-                      showDivider: false,
-                      onTap: widget.onNavigateToAdvanced,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Notifications
-                IosGroupedSection(
-                  header: 'Notifications',
-                  footer:
-                      'Checks Watching shows every 12h for today\'s episodes.',
-                  children: [
-                    IosSwitchRow(
-                      title: 'Episode Air-Date Reminders',
-                      subtitle: 'Notify when new episodes air',
-                      icon: MoglogIcons.bell,
-                      iconBackground: c.destructive,
-                      value: settings.episodeRemindersEnabled,
-                      showDivider: false,
-                      onChanged: _toggleEpisodeReminders,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // About
-                IosGroupedSection(
-                  header: 'About',
-                  footer: 'Uses the TMDB API; not endorsed by TMDB.',
-                  children: [
-                    IosGroupedRow(
-                      title: 'About',
-                      subtitle: 'Developer, updates & legal',
-                      icon: MoglogIcons.award,
-                      iconBackground: c.accent,
-                      showChevron: true,
-                      onTap: widget.onNavigateToAbout,
-                    ),
-                    IosGroupedRow(
-                      title: 'Version',
-                      trailing: Text(
-                        _versionName,
-                        style: t.body.copyWith(color: c.secondaryLabel),
+                  // Notifications
+                  IosGroupedSection(
+                    header: 'Notifications',
+                    footer:
+                        'Checks Watching shows every 12h for today\'s episodes.',
+                    children: [
+                      IosSwitchRow(
+                        title: 'Episode Air-Date Reminders',
+                        subtitle: 'Notify when new episodes air',
+                        icon: MoglogIcons.bell,
+                        iconBackground: c.destructive,
+                        value: settings.episodeRemindersEnabled,
+                        showDivider: false,
+                        onChanged: _toggleEpisodeReminders,
                       ),
-                      showDivider: false,
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // About
+                  IosGroupedSection(
+                    header: 'About',
+                    footer: 'Uses the TMDB API; not endorsed by TMDB.',
+                    children: [
+                      IosGroupedRow(
+                        title: 'About',
+                        subtitle: 'Developer, updates & legal',
+                        icon: MoglogIcons.award,
+                        iconBackground: c.accent,
+                        showChevron: true,
+                        onTap: widget.onNavigateToAbout,
+                      ),
+                      IosGroupedRow(
+                        title: 'Version',
+                        trailing: Text(
+                          _versionName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.subhead.copyWith(color: c.secondaryLabel),
+                        ),
+                        showDivider: false,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/design_system/tokens.dart';
 import '../features/detail/detail_screen.dart';
 import '../features/discover/discover_screen.dart';
 import '../features/library/library_screen.dart';
@@ -24,18 +25,21 @@ CustomTransitionPage<void> _iosSlidePage({
 }) {
   return CustomTransitionPage<void>(
     key: key,
-    transitionDuration: const Duration(milliseconds: 280),
-    reverseTransitionDuration: const Duration(milliseconds: 260),
+    transitionDuration: MoglogMotion.page,
+    reverseTransitionDuration: MoglogMotion.standard,
     child: child,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      if (MediaQuery.disableAnimationsOf(context)) {
+        return child;
+      }
       final curved = CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
+        curve: MoglogMotion.curve,
+        reverseCurve: MoglogMotion.reverseCurve,
       );
       final secondaryCurved = CurvedAnimation(
         parent: secondaryAnimation,
-        curve: Curves.easeOutCubic,
+        curve: MoglogMotion.curve,
       );
       return SlideTransition(
         position: Tween<Offset>(
@@ -48,13 +52,131 @@ CustomTransitionPage<void> _iosSlidePage({
             end: Offset.zero,
           ).animate(curved),
           child: FadeTransition(
-            opacity: Tween<double>(begin: 0.75, end: 1.0).animate(curved),
+            opacity: Tween<double>(begin: 0.85, end: 1.0).animate(curved),
             child: child,
           ),
         ),
       );
     },
   );
+}
+
+/// Hosts `StatefulShellRoute.indexedStack` with a zero-jank `ValueNotifier`
+/// scroll-direction observer so the floating glass tab bar auto-hides on
+/// downward scroll, reappears on upward scroll or at top, and broadcasts
+/// active-tab re-taps to scroll the current list back to top.
+class _MoglogShellScaffold extends StatefulWidget {
+  final StatefulNavigationShell navigationShell;
+
+  const _MoglogShellScaffold({required this.navigationShell});
+
+  @override
+  State<_MoglogShellScaffold> createState() => _MoglogShellScaffoldState();
+}
+
+class _MoglogShellScaffoldState extends State<_MoglogShellScaffold> {
+  final ValueNotifier<bool> _barVisible = ValueNotifier<bool>(true);
+  final TabRetapController _retapController = TabRetapController();
+  double _accumulatedDelta = 0.0;
+
+  @override
+  void didUpdateWidget(covariant _MoglogShellScaffold oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.navigationShell.currentIndex !=
+        widget.navigationShell.currentIndex) {
+      _accumulatedDelta = 0.0;
+      if (!_barVisible.value) {
+        _barVisible.value = true;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _barVisible.dispose();
+    _retapController.dispose();
+    super.dispose();
+  }
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    final pixels = notification.metrics.pixels;
+
+    // Always keep the floating tab bar visible near the top of any scroll view.
+    if (pixels <= 24) {
+      _accumulatedDelta = 0.0;
+      if (!_barVisible.value) {
+        _barVisible.value = true;
+      }
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0.0;
+      if (delta.abs() < 0.5) return false;
+
+      if ((delta > 0 && _accumulatedDelta < 0) ||
+          (delta < 0 && _accumulatedDelta > 0)) {
+        _accumulatedDelta = 0.0;
+      }
+      _accumulatedDelta += delta;
+
+      if (_accumulatedDelta > 22.0 && _barVisible.value) {
+        _barVisible.value = false;
+        _accumulatedDelta = 0.0;
+      } else if (_accumulatedDelta < -14.0 && !_barVisible.value) {
+        _barVisible.value = true;
+        _accumulatedDelta = 0.0;
+      }
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TabRetapScope(
+      controller: _retapController,
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        body: NotificationListener<ScrollNotification>(
+          onNotification: _onScrollNotification,
+          child: Stack(
+            children: [
+              widget.navigationShell,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _barVisible,
+                  builder: (context, visible, _) {
+                    return IosBottomTabBar(
+                      currentIndex: widget.navigationShell.currentIndex,
+                      visible: visible,
+                      onTap: (index) {
+                        final isRetap =
+                            index == widget.navigationShell.currentIndex;
+                        widget.navigationShell.goBranch(
+                          index,
+                          initialLocation: isRetap,
+                        );
+                        if (isRetap) {
+                          _retapController.notifyRetap(index);
+                        }
+                        if (!_barVisible.value) {
+                          _barVisible.value = true;
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -71,27 +193,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
-          return Scaffold(
-            body: Stack(
-              children: [
-                navigationShell,
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: IosBottomTabBar(
-                    currentIndex: navigationShell.currentIndex,
-                    onTap: (index) {
-                      navigationShell.goBranch(
-                        index,
-                        initialLocation: index == navigationShell.currentIndex,
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
+          return _MoglogShellScaffold(navigationShell: navigationShell);
         },
         branches: [
           StatefulShellBranch(
@@ -111,7 +213,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                 path: '/discover',
                 builder: (context, state) => DiscoverScreen(
                   onDramaTap: (id) => context.push('/detail/$id'),
-                  onNavigateToSettings: () => context.push('/settings/advanced'),
+                  onNavigateToSettings: () =>
+                      context.push('/settings/advanced'),
                   onNavigateToWatchCircle: () => context.push('/watch-circle'),
                 ),
               ),
@@ -136,7 +239,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                   onNavigateToWatchCircle: () => context.push('/watch-circle'),
                   onNavigateToAppearance: () =>
                       context.push('/settings/appearance'),
-                  onNavigateToAdvanced: () => context.push('/settings/advanced'),
+                  onNavigateToAdvanced: () =>
+                      context.push('/settings/advanced'),
                   onNavigateToAbout: () => context.push('/settings/about'),
                 ),
               ),
@@ -188,7 +292,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           key: state.pageKey,
           child: AdvancedSettingsScreen(
             onBack: () => context.pop(),
-            onNavigateToRecycleBin: () => context.push('/settings/recycle-bin'),
+            onNavigateToRecycleBin: () =>
+                context.push('/settings/recycle-bin'),
           ),
         ),
       ),

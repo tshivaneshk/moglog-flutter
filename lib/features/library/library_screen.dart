@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../app/ios_bottom_tab_bar.dart';
 import '../../app/providers.dart';
 import '../../core/design_system/components.dart';
 import '../../core/design_system/icons.dart';
 import '../../core/design_system/motion_haptics.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/design_system/tokens.dart';
 import '../../domain/logic/library_filter.dart';
 import '../../domain/logic/season_progress.dart';
 import '../../domain/model/app_settings.dart';
@@ -53,7 +55,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   void _onScroll() {
     final offset = _scrollController.offset;
-    if (!_headerCollapsed && offset > 60) {
+    if (!_headerCollapsed && offset > 56) {
       setState(() => _headerCollapsed = true);
     } else if (_headerCollapsed && offset < 16) {
       setState(() => _headerCollapsed = false);
@@ -93,8 +95,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       builder: (ctx) {
         final c = ctx.colors;
         final t = ctx.typo;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        return SingleChildScrollView(
+          padding: MoglogSpacing.sheetPadding,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,21 +108,30 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               const SizedBox(height: 6),
               Text(
                 'Group favorite dramas or themed watchlists into a custom shelf.',
-                style: t.caption.copyWith(color: c.secondaryLabel),
+                style: t.footnote.copyWith(color: c.secondaryLabel),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
+                constraints: const BoxConstraints(minHeight: 46),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: ShapeDecoration(
                   color: c.tertiaryBackground,
-                  borderRadius: MoglogShapes.control,
-                  border: Border.all(color: c.separator, width: 0.8),
+                  shape: MoglogShapes.smooth(
+                    MoglogShapes.controlRadius,
+                    side: BorderSide(
+                      color: c.glassBorder,
+                      width: c.hairlineWidth,
+                    ),
+                  ),
                 ),
+                alignment: Alignment.centerLeft,
                 child: TextField(
                   controller: ctrl,
                   maxLength: 28,
                   autofocus: true,
                   style: t.body.copyWith(color: c.label),
+                  cursorColor: c.accent,
                   decoration: InputDecoration(
                     border: InputBorder.none,
                     counterText: '',
@@ -129,7 +140,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               IosPrimaryButton(
                 text: 'Create Shelf',
                 onTap: () async {
@@ -181,33 +192,42 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       builder: (ctx) {
         final c = ctx.colors;
         final t = ctx.typo;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        return SingleChildScrollView(
+          padding: MoglogSpacing.sheetPadding,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Rename Shelf', style: t.title3.copyWith(color: c.label)),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
+                constraints: const BoxConstraints(minHeight: 46),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: ShapeDecoration(
                   color: c.tertiaryBackground,
-                  borderRadius: MoglogShapes.control,
-                  border: Border.all(color: c.separator, width: 0.8),
+                  shape: MoglogShapes.smooth(
+                    MoglogShapes.controlRadius,
+                    side: BorderSide(
+                      color: c.glassBorder,
+                      width: c.hairlineWidth,
+                    ),
+                  ),
                 ),
+                alignment: Alignment.centerLeft,
                 child: TextField(
                   controller: ctrl,
                   maxLength: 28,
                   autofocus: true,
                   style: t.body.copyWith(color: c.label),
+                  cursorColor: c.accent,
                   decoration: const InputDecoration(
                     border: InputBorder.none,
                     counterText: '',
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               IosPrimaryButton(
                 text: 'Save Changes',
                 onTap: () async {
@@ -274,8 +294,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   .updateDramasStatusBatch(ids, st);
               _exitMultiSelect();
               ref.read(toastProvider.notifier).show(
-                'Updated ${ids.length} shows to $st',
-              );
+                    'Updated ${ids.length} shows to $st',
+                  );
             },
           ),
       ],
@@ -289,12 +309,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     ctrl.moveDramasToRecycleBin(targets);
     _exitMultiSelect();
     ref.read(toastProvider.notifier).show(
-      'Moved ${targets.length} shows to Recycle Bin',
-      actionLabel: 'Undo',
-      onAction: () {
-        ctrl.restoreDramasBatch(targets);
-      },
-    );
+          'Moved ${targets.length} shows to Recycle Bin',
+          actionLabel: 'Undo',
+          onAction: () {
+            ctrl.restoreDramasBatch(targets);
+          },
+        );
   }
 
   void _openContextMenu(Drama drama) {
@@ -309,8 +329,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       onQuickRate: (r) {
         ctrl.saveDrama(drama.copyWith(myRating: r));
         ref.read(toastProvider.notifier).show(
-          'Rated "${drama.title}" ${r.toStringAsFixed(1)}/10',
-        );
+              'Rated "${drama.title}" ${r.toStringAsFixed(1)}/10',
+            );
       },
       onIncrementEpisode: () => ctrl.incrementEpisodeQuick(drama),
       onShare: () {
@@ -332,10 +352,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       onMoveToBin: () {
         ctrl.moveToRecycleBin(drama);
         ref.read(toastProvider.notifier).show(
-          'Moved "${drama.title}" to Recycle Bin',
-          actionLabel: 'Undo',
-          onAction: () => ctrl.restoreDrama(drama),
-        );
+              'Moved "${drama.title}" to Recycle Bin',
+              actionLabel: 'Undo',
+              onAction: () => ctrl.restoreDrama(drama),
+            );
       },
     );
   }
@@ -343,7 +363,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final t = context.typo;
     final allDramas = ref.watch(currentDramasProvider);
     final settings = ref.watch(currentSettingsProvider);
     final selectedStatus = ref.watch(librarySelectedStatusProvider);
@@ -354,8 +373,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final activeDramas = allDramas.where((d) => !d.isDeleted).toList();
     final plannedDramas =
         activeDramas.where((d) => d.status == 'Planned').toList();
-    final doneDramas =
-        activeDramas.where((d) => d.status == 'Done').toList();
+    final doneDramas = activeDramas.where((d) => d.status == 'Done').toList();
     final randomPool = selectedStatus == 'Planned'
         ? plannedDramas
         : (selectedStatus == 'Done' ? doneDramas : const <Drama>[]);
@@ -380,6 +398,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       ..sort();
 
     final size = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final screenWidthDp = size.width;
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
@@ -404,13 +423,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         selectedShelf == null &&
         watchingDramas.isNotEmpty;
 
+    final shelfRailHeight = 38.0 * textScale.clamp(1.0, 1.75);
+    final shellBottomPad = MoglogLayout.shellScrollBottomPadding(context);
+    final gridAspectRatio =
+        textScale > 1.3 ? (0.58 / textScale.clamp(1.0, 1.32)) : 0.58;
+
     final pinnedControls = activeDramas.isEmpty
         ? null
         : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (isLandscape && screenWidthDp >= 480)
+              if (isLandscape && screenWidthDp >= 500)
                 Row(
                   children: [
                     Expanded(
@@ -472,7 +496,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               if (!_headerCollapsed || selectedShelf != null) ...[
                 const SizedBox(height: 8),
                 SizedBox(
-                  height: 34,
+                  height: shelfRailHeight,
                   child: ListView(
                     scrollDirection: Axis.horizontal,
                     children: [
@@ -521,291 +545,313 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             ],
           );
 
-    return Scaffold(
-      backgroundColor: c.background,
-      body: Column(
-        children: [
-          if (_multiSelectMode)
-            IosLargeTitleHeader(
-              title: '${_selectedIds.length} Selected',
-              collapsed: true,
-              trailingActions: [
-                IosCircleIconButton(
-                  icon: MoglogIcons.filter,
-                  tooltip: 'Bulk Status',
-                  tint: c.accent,
-                  onTap: _showBulkStatusSheet,
-                ),
-                IosCircleIconButton(
-                  icon: MoglogIcons.trash,
-                  tooltip: 'Move to Recycle Bin',
-                  tint: c.destructive,
-                  onTap: () => _bulkMoveToBin(allDramas),
-                ),
-                IosPressable(
-                  onTap: _exitMultiSelect,
-                  hapticOnTap: true,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Text(
-                      'Done',
-                      style: t.callout.copyWith(
-                        color: c.accent,
-                        fontWeight: FontWeight.w600,
-                      ),
+    return TabRetapListener(
+      branchIndex: 0,
+      scrollController: _scrollController,
+      child: Scaffold(
+        backgroundColor: c.background,
+        body: Column(
+          children: [
+            if (_multiSelectMode)
+              IosLargeTitleHeader(
+                title: '${_selectedIds.length} Selected',
+                collapsed: true,
+                trailingActions: [
+                  IosCircleIconButton(
+                    icon: MoglogIcons.filter,
+                    tooltip: 'Bulk Status',
+                    tint: c.accentText,
+                    onTap: _showBulkStatusSheet,
+                  ),
+                  IosCircleIconButton(
+                    icon: MoglogIcons.trash,
+                    tooltip: 'Move to Recycle Bin',
+                    tint: c.destructive,
+                    onTap: () => _bulkMoveToBin(allDramas),
+                  ),
+                  IosTertiaryButton(
+                    text: 'Done',
+                    size: MoglogButtonSize.small,
+                    onTap: _exitMultiSelect,
+                  ),
+                ],
+              )
+            else
+              IosLargeTitleHeader(
+                title: 'Library',
+                collapsed: _headerCollapsed,
+                bottomContent: pinnedControls,
+                trailingActions: [
+                  if ((selectedStatus == 'Planned' ||
+                          selectedStatus == 'Done') &&
+                      randomPool.length >= 2)
+                    IosCircleIconButton(
+                      icon: MoglogIcons.dices,
+                      tooltip: 'Random Picker ($selectedStatus)',
+                      tint: c.accentText,
+                      onTap: () {
+                        final pick = randomPool[
+                            Random.secure().nextInt(randomPool.length)];
+                        ref.read(toastProvider.notifier).show(
+                              'Random pick: "${pick.title}"',
+                            );
+                        widget.onDramaTap(pick.id);
+                      },
+                    ),
+                  if (settings.showLayoutSwitchInHome)
+                    IosCircleIconButton(
+                      icon: settings.layoutMode == LibraryLayoutMode.grid
+                          ? MoglogIcons.listRows
+                          : MoglogIcons.grid,
+                      tooltip: 'Toggle grid or list view',
+                      onTap: () {
+                        final next =
+                            settings.layoutMode == LibraryLayoutMode.grid
+                                ? LibraryLayoutMode.list
+                                : LibraryLayoutMode.grid;
+                        ref.read(settingsStoreProvider).setLayoutMode(next);
+                      },
+                    ),
+                  IosCircleIconButton(
+                    icon: MoglogIcons.filter,
+                    tooltip: 'Sort & Filter',
+                    showBadgeDot: !filterState.isDefault,
+                    tint: filterState.isDefault ? c.label : c.accentText,
+                    onTap: () => showSortFilterSheet(
+                      context: context,
+                      currentState: filterState,
+                      availableGenres: availableGenres,
+                      onApply: (next) => ref
+                          .read(libraryFilterStateProvider.notifier)
+                          .state = next,
+                      onReset: () => ref
+                          .read(libraryFilterStateProvider.notifier)
+                          .state = const LibraryFilterState(),
                     ),
                   ),
-                ),
-              ],
-            )
-          else
-            IosLargeTitleHeader(
-              title: 'Library',
-              collapsed: _headerCollapsed,
-              bottomContent: pinnedControls,
-              trailingActions: [
-                if ((selectedStatus == 'Planned' || selectedStatus == 'Done') &&
-                    randomPool.length >= 2)
                   IosCircleIconButton(
-                    icon: MoglogIcons.dices,
-                    tooltip: 'Random Picker ($selectedStatus)',
-                    tint: c.accent,
-                    onTap: () {
-                      final pick =
-                          randomPool[Random.secure().nextInt(randomPool.length)];
-                      ref.read(toastProvider.notifier).show(
-                        'Random pick: "${pick.title}"',
-                      );
-                      widget.onDramaTap(pick.id);
-                    },
+                    icon: MoglogIcons.plus,
+                    tooltip: 'Add show',
+                    tint: c.onAccent,
+                    backgroundColor: c.accent,
+                    onTap: widget.onNavigateToDiscover,
                   ),
-                if (settings.showLayoutSwitchInHome)
-                  IosCircleIconButton(
-                    icon: settings.layoutMode == LibraryLayoutMode.grid
-                        ? MoglogIcons.listRows
-                        : MoglogIcons.grid,
-                    tooltip: 'Toggle grid or list view',
-                    onTap: () {
-                      final next = settings.layoutMode == LibraryLayoutMode.grid
-                          ? LibraryLayoutMode.list
-                          : LibraryLayoutMode.grid;
-                      ref.read(settingsStoreProvider).setLayoutMode(next);
-                    },
-                  ),
-                IosCircleIconButton(
-                  icon: MoglogIcons.filter,
-                  tooltip: 'Sort & Filter',
-                  showBadgeDot: !filterState.isDefault,
-                  tint: filterState.isDefault ? c.label : c.accent,
-                  onTap: () => showSortFilterSheet(
-                    context: context,
-                    currentState: filterState,
-                    availableGenres: availableGenres,
-                    onApply: (next) =>
-                        ref.read(libraryFilterStateProvider.notifier).state = next,
-                    onReset: () => ref.read(libraryFilterStateProvider.notifier).state =
-                        const LibraryFilterState(),
-                  ),
-                ),
-                IosCircleIconButton(
-                  icon: MoglogIcons.plus,
-                  tooltip: 'Add show',
-                  tint: c.onAccent,
-                  backgroundColor: c.accent,
-                  onTap: widget.onNavigateToDiscover,
-                ),
-              ],
-            ),
-
-          Expanded(
-            child: activeDramas.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 72),
-                      child: IosEmptyState(
-                        icon: MoglogIcons.library,
-                        title: 'Your Library is Empty',
-                        subtitle:
-                            'Track your favorite series, episode progress, ratings, and collections in one clean place.',
-                        actionLabel: 'Discover Shows',
-                        onAction: widget.onNavigateToDiscover,
-                      ),
-                    ),
-                  )
-                : RefreshIndicator(
-                    color: c.accent,
-                    backgroundColor: c.elevatedSurface,
-                    displacement: 28,
-                    strokeWidth: 2.2,
-                    onRefresh: () async {
-                      MoglogHaptics.lightImpact();
-                      await ref
-                          .read(dramaControllerProvider)
-                          .reconcileCloudAndLocal();
-                    },
-                    child: CustomScrollView(
-                      controller: _scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(
-                        parent: ClampingScrollPhysics(),
-                      ),
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      slivers: [
-                      // Continue Watching Rail
-                      if (showContinueWatching)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 10, bottom: 10),
-                            child: ContinueWatchingSection(
-                              watchingDramas: watchingDramas,
-                              onDramaTap: (d) => widget.onDramaTap(d.id),
-                              onIncrementEpisode: (d) => ref
-                                  .read(dramaControllerProvider)
-                                  .incrementEpisodeQuick(d),
-                            ),
-                          ),
+                ],
+              ),
+            Expanded(
+              child: activeDramas.isEmpty
+                  ? Center(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.only(bottom: shellBottomPad * 0.65),
+                        child: IosEmptyState(
+                          icon: MoglogIcons.library,
+                          title: 'Your Library is Empty',
+                          subtitle:
+                              'Track your favorite series, episode progress, ratings, and collections in one calm place.',
+                          actionLabel: 'Discover Shows',
+                          onAction: widget.onNavigateToDiscover,
                         ),
-
-                      // Empty filter results vs Grid / List
-                      if (filtered.isEmpty)
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 90),
-                              child: IosEmptyState(
-                                icon: MoglogIcons.search,
-                                title: 'No Matching Shows',
-                                subtitle:
-                                    'Try adjusting your search query or clearing active filters.',
-                                actionLabel: 'Clear Filters',
-                                onAction: () {
-                                  _searchController.clear();
-                                  ref.read(librarySearchQueryProvider.notifier).state = '';
-                                  ref.read(librarySelectedStatusProvider.notifier).state = 'All';
-                                  ref.read(librarySelectedShelfProvider.notifier).state = null;
-                                  ref.read(libraryFilterStateProvider.notifier).state =
-                                      const LibraryFilterState();
+                      ),
+                    )
+                  : RefreshIndicator(
+                      color: c.accent,
+                      backgroundColor: c.elevatedSurface,
+                      displacement: 28,
+                      strokeWidth: 2.2,
+                      onRefresh: () async {
+                        MoglogHaptics.lightImpact();
+                        await ref
+                            .read(dramaControllerProvider)
+                            .reconcileCloudAndLocal();
+                      },
+                      child: CustomScrollView(
+                        controller: _scrollController,
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: ClampingScrollPhysics(),
+                        ),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        slivers: [
+                          if (showContinueWatching)
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  top: MoglogSpacing.sm,
+                                  bottom: MoglogSpacing.xs,
+                                ),
+                                child: ContinueWatchingSection(
+                                  watchingDramas: watchingDramas,
+                                  onDramaTap: (d) => widget.onDramaTap(d.id),
+                                  onIncrementEpisode: (d) => ref
+                                      .read(dramaControllerProvider)
+                                      .incrementEpisodeQuick(d),
+                                ),
+                              ),
+                            ),
+                          if (filtered.isEmpty)
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Center(
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: shellBottomPad * 0.75,
+                                  ),
+                                  child: IosEmptyState(
+                                    icon: MoglogIcons.search,
+                                    title: 'No Matching Shows',
+                                    subtitle:
+                                        'Try adjusting your search query or clearing active filters.',
+                                    actionLabel: 'Clear Filters',
+                                    onAction: () {
+                                      _searchController.clear();
+                                      ref
+                                          .read(librarySearchQueryProvider
+                                              .notifier)
+                                          .state = '';
+                                      ref
+                                          .read(librarySelectedStatusProvider
+                                              .notifier)
+                                          .state = 'All';
+                                      ref
+                                          .read(librarySelectedShelfProvider
+                                              .notifier)
+                                          .state = null;
+                                      ref
+                                          .read(
+                                              libraryFilterStateProvider.notifier)
+                                          .state = const LibraryFilterState();
+                                    },
+                                  ),
+                                ),
+                              ),
+                            )
+                          else if (settings.layoutMode ==
+                              LibraryLayoutMode.grid)
+                            SliverPadding(
+                              padding: EdgeInsets.fromLTRB(
+                                (effectiveColumns >= 4 || screenWidthDp < 340)
+                                    ? MoglogSpacing.sm
+                                    : MoglogSpacing.md,
+                                MoglogSpacing.sm,
+                                (effectiveColumns >= 4 || screenWidthDp < 340)
+                                    ? MoglogSpacing.sm
+                                    : MoglogSpacing.md,
+                                shellBottomPad,
+                              ),
+                              sliver: SliverGrid(
+                                gridDelegate: isLandscape
+                                    ? SliverGridDelegateWithMaxCrossAxisExtent(
+                                        maxCrossAxisExtent:
+                                            screenWidthDp < 480 ? 118 : 144,
+                                        mainAxisSpacing:
+                                            screenWidthDp < 340 ? 12 : 16,
+                                        crossAxisSpacing:
+                                            screenWidthDp < 340 ? 8 : 12,
+                                        childAspectRatio: gridAspectRatio,
+                                      )
+                                    : SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: effectiveColumns,
+                                        mainAxisSpacing:
+                                            (effectiveColumns >= 4 ||
+                                                    screenWidthDp < 340)
+                                                ? 12
+                                                : 16,
+                                        crossAxisSpacing:
+                                            (effectiveColumns >= 4 ||
+                                                    screenWidthDp < 340)
+                                                ? 8
+                                                : 12,
+                                        childAspectRatio: gridAspectRatio,
+                                      ),
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) {
+                                    final drama = filtered[index];
+                                    return PosterGridItem(
+                                      drama: drama,
+                                      isTopFour: settings.topFourFavoriteIds
+                                          .contains(drama.id),
+                                      multiSelectMode: _multiSelectMode,
+                                      isSelected:
+                                          _selectedIds.contains(drama.id),
+                                      onTap: () {
+                                        if (_multiSelectMode) {
+                                          _toggleSelection(drama.id);
+                                        } else {
+                                          widget.onDramaTap(drama.id);
+                                        }
+                                      },
+                                      onLongPress: () {
+                                        if (_multiSelectMode) {
+                                          _toggleSelection(drama.id);
+                                        } else {
+                                          _openContextMenu(drama);
+                                        }
+                                      },
+                                    );
+                                  },
+                                  childCount: filtered.length,
+                                ),
+                              ),
+                            )
+                          else
+                            SliverPadding(
+                              padding: EdgeInsets.fromLTRB(
+                                MoglogSpacing.md,
+                                MoglogSpacing.sm,
+                                MoglogSpacing.md,
+                                shellBottomPad,
+                              ),
+                              sliver: SliverList.separated(
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 10),
+                                itemBuilder: (context, index) {
+                                  final drama = filtered[index];
+                                  return CompactDramaRow(
+                                    drama: drama,
+                                    isTopFour: settings.topFourFavoriteIds
+                                        .contains(drama.id),
+                                    multiSelectMode: _multiSelectMode,
+                                    isSelected:
+                                        _selectedIds.contains(drama.id),
+                                    onTap: () {
+                                      if (_multiSelectMode) {
+                                        _toggleSelection(drama.id);
+                                      } else {
+                                        widget.onDramaTap(drama.id);
+                                      }
+                                    },
+                                    onLongPress: () {
+                                      if (_multiSelectMode) {
+                                        _toggleSelection(drama.id);
+                                      } else {
+                                        _openContextMenu(drama);
+                                      }
+                                    },
+                                    onIncrementEpisode: () => ref
+                                        .read(dramaControllerProvider)
+                                        .incrementEpisodeQuick(drama),
+                                    onMoveToBin: () {
+                                      final ctrl =
+                                          ref.read(dramaControllerProvider);
+                                      ctrl.moveToRecycleBin(drama);
+                                      ref.read(toastProvider.notifier).show(
+                                            'Moved "${drama.title}" to Recycle Bin',
+                                            actionLabel: 'Undo',
+                                            onAction: () =>
+                                                ctrl.restoreDrama(drama),
+                                          );
+                                    },
+                                  );
                                 },
                               ),
                             ),
-                          ),
-                        )
-                      else if (settings.layoutMode == LibraryLayoutMode.grid)
-                        SliverPadding(
-                          padding: EdgeInsets.fromLTRB(
-                            (effectiveColumns >= 4 || screenWidthDp < 340)
-                                ? 12
-                                : 16,
-                            10,
-                            (effectiveColumns >= 4 || screenWidthDp < 340)
-                                ? 12
-                                : 16,
-                            104,
-                          ),
-                          sliver: SliverGrid(
-                            gridDelegate: isLandscape
-                                ? SliverGridDelegateWithMaxCrossAxisExtent(
-                                    maxCrossAxisExtent:
-                                        screenWidthDp < 480 ? 115 : 140,
-                                    mainAxisSpacing:
-                                        screenWidthDp < 340 ? 12 : 16,
-                                    crossAxisSpacing:
-                                        screenWidthDp < 340 ? 8 : 12,
-                                    childAspectRatio: 0.58,
-                                  )
-                                : SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: effectiveColumns,
-                                    mainAxisSpacing:
-                                        (effectiveColumns >= 4 ||
-                                                screenWidthDp < 340)
-                                            ? 12
-                                            : 16,
-                                    crossAxisSpacing:
-                                        (effectiveColumns >= 4 ||
-                                                screenWidthDp < 340)
-                                            ? 8
-                                            : 12,
-                                    childAspectRatio: 0.58,
-                                  ),
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                final drama = filtered[index];
-                                return PosterGridItem(
-                                  drama: drama,
-                                  isTopFour: settings.topFourFavoriteIds
-                                      .contains(drama.id),
-                                  multiSelectMode: _multiSelectMode,
-                                  isSelected: _selectedIds.contains(drama.id),
-                                  onTap: () {
-                                    if (_multiSelectMode) {
-                                      _toggleSelection(drama.id);
-                                    } else {
-                                      widget.onDramaTap(drama.id);
-                                    }
-                                  },
-                                  onLongPress: () {
-                                    if (_multiSelectMode) {
-                                      _toggleSelection(drama.id);
-                                    } else {
-                                      _openContextMenu(drama);
-                                    }
-                                  },
-                                );
-                              },
-                              childCount: filtered.length,
-                            ),
-                          ),
-                        )
-                      else
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 104),
-                          sliver: SliverList.separated(
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 10),
-                            itemBuilder: (context, index) {
-                              final drama = filtered[index];
-                              return CompactDramaRow(
-                                drama: drama,
-                                isTopFour: settings.topFourFavoriteIds
-                                    .contains(drama.id),
-                                multiSelectMode: _multiSelectMode,
-                                isSelected: _selectedIds.contains(drama.id),
-                                onTap: () {
-                                  if (_multiSelectMode) {
-                                    _toggleSelection(drama.id);
-                                  } else {
-                                    widget.onDramaTap(drama.id);
-                                  }
-                                },
-                                onLongPress: () {
-                                  if (_multiSelectMode) {
-                                    _toggleSelection(drama.id);
-                                  } else {
-                                    _openContextMenu(drama);
-                                  }
-                                },
-                                onIncrementEpisode: () => ref
-                                    .read(dramaControllerProvider)
-                                    .incrementEpisodeQuick(drama),
-                                onMoveToBin: () {
-                                  final ctrl = ref.read(dramaControllerProvider);
-                                  ctrl.moveToRecycleBin(drama);
-                                  ref.read(toastProvider.notifier).show(
-                                    'Moved "${drama.title}" to Recycle Bin',
-                                    actionLabel: 'Undo',
-                                    onAction: () => ctrl.restoreDrama(drama),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -834,50 +880,59 @@ class _ShelfChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.typo;
+    final reduceMotion = context.reduceMotion;
+
     return IosPressable(
       onTap: onTap,
       onLongPress: onLongPress,
       hapticOnTap: true,
+      hapticType: MoglogTapHaptic.selection,
       pressedScale: 0.95,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? c.accent
-              : (isAction ? Colors.transparent : c.secondaryBackground),
-          borderRadius: MoglogShapes.pill,
-          border: Border.all(
+      semanticSelected: isAction ? null : selected,
+      focusRadius: MoglogShapes.pillRadius,
+      child: Center(
+        child: AnimatedContainer(
+          duration: reduceMotion ? Duration.zero : MoglogMotion.fast,
+          curve: MoglogMotion.curve,
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+          decoration: BoxDecoration(
             color: selected
                 ? c.accent
-                : (isAction ? c.accent.withValues(alpha: 0.6) : c.separator),
-            width: 0.8,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-                size: 13,
-                color: selected
-                    ? c.onAccent
-                    : (iconColor ?? (isAction ? c.accent : c.label)),
-              ),
-              const SizedBox(width: 5),
-            ],
-            Text(
-              label,
-              style: t.caption.copyWith(
-                color: selected
-                    ? c.onAccent
-                    : (isAction ? c.accent : c.label),
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-              ),
+                : (isAction ? c.accentSubtle : c.secondaryBackground),
+            borderRadius: MoglogShapes.pill,
+            border: Border.all(
+              color: selected
+                  ? c.accent
+                  : (isAction
+                      ? c.accent.withValues(alpha: 0.45)
+                      : c.glassBorder),
+              width: c.hairlineWidth,
             ),
-          ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 13,
+                  color: selected
+                      ? c.onAccent
+                      : (iconColor ?? (isAction ? c.accentText : c.label)),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                label,
+                style: t.caption.copyWith(
+                  color: selected
+                      ? c.onAccent
+                      : (isAction ? c.accentText : c.label),
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

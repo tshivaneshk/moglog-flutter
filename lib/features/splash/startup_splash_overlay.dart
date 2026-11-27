@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/design_system/shapes.dart';
 import '../../core/design_system/theme.dart';
 
-/// Exact 1:1 port of Kotlin `MoglogStartupSplashScreen`:
-/// Deep obsidian-to-emerald vertical gradient, pulsing 86dp `app_logo2` (scale 0.96..1.04, 1200ms reverse),
-/// and 140dp emerald `LinearProgressIndicator`.
+/// Calm iOS 18 startup splash overlay with tokenized atmospheric gradient,
+/// squircle-24 logo medallion, and reduce-motion support.
 class MoglogStartupSplashScreen extends StatefulWidget {
   const MoglogStartupSplashScreen({super.key});
 
@@ -40,15 +39,43 @@ class _MoglogStartupSplashScreenState extends State<MoglogStartupSplashScreen>
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final reduceMotion = context.reduceMotion;
+
+    final logoBadge = Container(
+      width: 88,
+      height: 88,
+      decoration: ShapeDecoration(
+        shape: MoglogShapes.smooth(
+          24,
+          side: BorderSide(
+            color: c.accent.withValues(alpha: 0.38),
+            width: 1.0,
+          ),
+        ),
+        shadows: [
+          BoxShadow(
+            color: c.accent.withValues(alpha: c.isDark ? 0.24 : 0.16),
+            blurRadius: 28,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        'assets/images/app_logo2.png',
+        fit: BoxFit.cover,
+      ),
+    );
+
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            const Color(0xFF06080E),
+            c.splashTop,
             c.background,
-            const Color(0xFF07120D),
+            c.splashBottom,
           ],
         ),
       ),
@@ -56,27 +83,13 @@ class _MoglogStartupSplashScreenState extends State<MoglogStartupSplashScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ScaleTransition(
-              scale: _scaleAnim,
-              child: Container(
-                width: 86,
-                height: 86,
-                decoration: ShapeDecoration(
-                  shape: MoglogShapes.smooth(
-                    22,
-                    side: BorderSide(
-                      color: c.accent.withValues(alpha: 0.35),
-                      width: 1,
-                    ),
-                  ),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Image.asset(
-                  'assets/images/app_logo2.png',
-                  fit: BoxFit.cover,
-                ),
+            if (reduceMotion)
+              logoBadge
+            else
+              ScaleTransition(
+                scale: _scaleAnim,
+                child: logoBadge,
               ),
-            ),
             const SizedBox(height: 32),
             SizedBox(
               width: 140,
