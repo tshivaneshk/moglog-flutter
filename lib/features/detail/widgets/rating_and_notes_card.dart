@@ -231,19 +231,6 @@ class _RatingAndNotesCardState extends State<RatingAndNotesCard> {
                     style: t.footnote.copyWith(color: c.destructive),
                   ),
                 ],
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(MoglogIcons.lock, size: 13, color: c.secondaryLabel),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Encrypted in transit via TLS & authenticated by Firebase Auth.',
-                        style: t.caption2.copyWith(color: c.secondaryLabel),
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 16),
                 IosPrimaryButton(
                   text: existing != null ? 'Save Changes' : 'Post Review',

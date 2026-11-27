@@ -849,6 +849,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                         text: 'Watch Trailer',
                         leadingIcon: MoglogIcons.play,
                         size: MoglogButtonSize.medium,
+                        singleLine: true,
                         backgroundColor: accent,
                         foregroundColor: _contrastInkForAccent(accent, c),
                         onTap: () => launchUrl(
@@ -865,15 +866,13 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                   ],
                   Expanded(
                     child: IosSecondaryButton(
-                      text: 'Search Web',
+                      text: 'Open in TMDB',
                       leadingIcon: MoglogIcons.externalLink,
                       size: MoglogButtonSize.medium,
+                      singleLine: true,
                       onTap: () {
-                        final q = Uri.encodeComponent(
-                          '${drama.title} tv series',
-                        );
                         launchUrl(
-                          Uri.parse('https://www.google.com/search?q=$q'),
+                          Uri.https('www.themoviedb.org', '/tv/${drama.id}'),
                           mode: LaunchMode.externalApplication,
                         );
                       },

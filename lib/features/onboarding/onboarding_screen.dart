@@ -264,7 +264,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                   subtitle:
                                       'Your library stays encrypted on device.',
                                   infoDescription:
-                                      'Protected at rest with SQLCipher (256-bit AES) and hardware-backed Android Keystore.',
+                                      'Your watchlist and API credentials stay private and encrypted on your device.',
                                 ),
                                 const SizedBox(height: 12),
                                 _FeatureHighlightTile(
@@ -452,7 +452,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                     const IosInfoButton(
                                       title: 'Cloud Encryption',
                                       description:
-                                          'Optional end-to-end encrypted backup using PBKDF2-HMAC-SHA256 (600,000 iterations) + AES-256-GCM before upload.',
+                                          'Optional password-protected cloud backup encrypted on your device before upload.',
                                     ),
                                   ],
                                 ),

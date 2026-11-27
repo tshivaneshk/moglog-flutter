@@ -236,7 +236,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     const IosInfoButton(
                       title: 'Encryption Details',
                       description:
-                          'End-to-end cloud backups are encrypted on your device using PBKDF2-HMAC-SHA256 (600,000 iterations) + AES-256-GCM before upload.',
+                          'End-to-end cloud backups are locked with your password on your device before upload.',
                     ),
                   ],
                 ),
@@ -595,7 +595,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                         title: 'Encrypted Cloud Backup',
                         subtitle: 'Lock cloud sync with your passphrase',
                         infoDescription:
-                            'Encrypts your library client-side using PBKDF2-HMAC-SHA256 (600,000 iterations) and AES-256-GCM before uploading.',
+                            'Encrypts your library on your device with your password before uploading.',
                         icon: MoglogIcons.lock,
                         iconBackground: c.statusWatching,
                         value: settings.encryptedCloudBackupEnabled,

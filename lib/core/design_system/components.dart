@@ -984,19 +984,22 @@ class IosSegmentedControl extends StatelessWidget {
                               child: Padding(
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 4),
-                                child: Text(
-                                  labels[i],
-                                  maxLines: 1,
-                                  textAlign: TextAlign.center,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: (useCompactCaption
-                                          ? t.caption2
-                                          : t.footnote)
-                                      .copyWith(
-                                    fontWeight: isSelected
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                    color: labelColor,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    labels[i],
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    textAlign: TextAlign.center,
+                                    style: (useCompactCaption
+                                            ? t.caption2
+                                            : t.footnote)
+                                        .copyWith(
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.w500,
+                                      color: labelColor,
+                                    ),
                                   ),
                                 ),
                               ),

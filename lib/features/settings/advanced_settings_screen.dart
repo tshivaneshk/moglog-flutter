@@ -96,7 +96,7 @@ class _AdvancedSettingsScreenState
           label: 'Encrypted Backup (.moglog)',
           icon: MoglogIcons.lock,
           infoDescription:
-              'Password-protected portable backup encrypted with PBKDF2-HMAC-SHA256 (600,000 iterations) and AES-256-GCM.',
+              'Password-protected portable backup encrypted on your device.',
           onTap: _promptExportPassphrase,
         ),
         ActionSheetItem(
@@ -139,7 +139,7 @@ class _AdvancedSettingsScreenState
                     const IosInfoButton(
                       title: 'Backup Encryption',
                       description:
-                          'Encrypted with PBKDF2-HMAC-SHA256 (600,000 iterations) and AES-256-GCM for cross-device compatibility.',
+                          'Protected with your backup password for safe cross-device restore.',
                     ),
                   ],
                 ),
